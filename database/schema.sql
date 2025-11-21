@@ -229,12 +229,14 @@ CREATE TABLE IF NOT EXISTS public.mail_rules (
   event_type TEXT NOT NULL CHECK (event_type IN ('selection_submitted', 'batch_uploaded')),
   recipient_name TEXT,
   recipient_email TEXT NOT NULL,
+  profile_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_mail_rules_event ON public.mail_rules(event_type);
 CREATE INDEX IF NOT EXISTS idx_mail_rules_recipient ON public.mail_rules(recipient_email);
+CREATE INDEX IF NOT EXISTS idx_mail_rules_profile ON public.mail_rules(profile_id);
 
 ALTER TABLE public.mail_rules ENABLE ROW LEVEL SECURITY;
 

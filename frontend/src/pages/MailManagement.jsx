@@ -27,12 +27,19 @@ const initialFormState = MAIL_EVENTS.reduce((acc, event) => {
   return acc
 }, {})
 
+const initialUserSelectState = MAIL_EVENTS.reduce((acc, event) => {
+  acc[event.value] = ''
+  return acc
+}, {})
+
 export default function MailManagement() {
   const { user } = useAuth()
   const [rules, setRules] = useState([])
+  const [availableUsers, setAvailableUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [formState, setFormState] = useState(initialFormState)
+  const [userSelectState, setUserSelectState] = useState(initialUserSelectState)
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
@@ -44,12 +51,40 @@ export default function MailManagement() {
       setLoading(true)
       setError('')
       const response = await getMailRules()
-      setRules(response.data || [])
+      setRules(response.data?.rules || [])
+      setAvailableUsers(response.data?.availableUsers || [])
     } catch (err) {
       console.error('載入郵件規則失敗:', err)
       setError('無法取得郵件設定，請稍後再試。')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleAddRecipientFromUser(eventType) {
+    const profileId = userSelectState[eventType]
+    if (!profileId) {
+      setError('請先選擇要新增的使用者')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      await createMailRule({
+        eventType,
+        profileId,
+        createdBy: user?.id,
+      })
+      setUserSelectState((prev) => ({
+        ...prev,
+        [eventType]: '',
+      }))
+      await loadMailRules()
+    } catch (err) {
+      console.error('新增使用者收件人失敗:', err)
+      setError(err.response?.data?.message || '新增失敗，請稍後再試。')
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -136,6 +171,12 @@ export default function MailManagement() {
                   系統預設會通知：管理員 Email（環境變數）與該批次的上傳者，您可以另外加上其他收件人。
                 </div>
               )}
+              {event.value === 'batch_uploaded' && (
+                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  預設會通知所有管理員與上傳者（排除本次上傳者），若需額外通知對象可在此加入。
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -163,42 +204,76 @@ export default function MailManagement() {
               ))}
             </div>
 
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">新增收件人</p>
-              <div className="flex flex-col md:flex-row gap-3">
-                <input
-                  type="text"
-                  className="input flex-1"
-                  placeholder="顯示名稱（選填）"
-                  value={formState[event.value].name}
-                  onChange={(e) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      [event.value]: { ...prev[event.value], name: e.target.value },
-                    }))
-                  }
-                />
-                <input
-                  type="email"
-                  className="input flex-1"
-                  placeholder="收件人 Email"
-                  value={formState[event.value].email}
-                  onChange={(e) =>
-                    setFormState((prev) => ({
-                      ...prev,
-                      [event.value]: { ...prev[event.value], email: e.target.value },
-                    }))
-                  }
-                />
-                <button
-                  type="button"
-                  className="btn-primary flex items-center justify-center gap-2"
-                  onClick={() => handleAddRecipient(event.value)}
-                  disabled={submitting}
-                >
-                  <Plus className="h-4 w-4" />
-                  新增
-                </button>
+            <div className="border-t border-gray-100 pt-4 space-y-4">
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">從系統使用者加入</p>
+                <div className="flex flex-col md:flex-row gap-3">
+                  <select
+                    className="select flex-1"
+                    value={userSelectState[event.value]}
+                    onChange={(e) =>
+                      setUserSelectState((prev) => ({
+                        ...prev,
+                        [event.value]: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">選擇使用者</option>
+                    {availableUsers.map((staff) => (
+                      <option key={staff.id} value={staff.id}>
+                        {staff.name}（{staff.email}）
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="btn-secondary flex items-center justify-center gap-2"
+                    onClick={() => handleAddRecipientFromUser(event.value)}
+                    disabled={submitting}
+                  >
+                    <Plus className="h-4 w-4" />
+                    加入使用者
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-3">手動輸入 Email</p>
+                <div className="flex flex-col md:flex-row gap-3">
+                  <input
+                    type="text"
+                    className="input flex-1"
+                    placeholder="顯示名稱（選填）"
+                    value={formState[event.value].name}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        [event.value]: { ...prev[event.value], name: e.target.value },
+                      }))
+                    }
+                  />
+                  <input
+                    type="email"
+                    className="input flex-1"
+                    placeholder="收件人 Email"
+                    value={formState[event.value].email}
+                    onChange={(e) =>
+                      setFormState((prev) => ({
+                        ...prev,
+                        [event.value]: { ...prev[event.value], email: e.target.value },
+                      }))
+                    }
+                  />
+                  <button
+                    type="button"
+                    className="btn-primary flex items-center justify-center gap-2"
+                    onClick={() => handleAddRecipient(event.value)}
+                    disabled={submitting}
+                  >
+                    <Plus className="h-4 w-4" />
+                    新增
+                  </button>
+                </div>
               </div>
             </div>
           </section>

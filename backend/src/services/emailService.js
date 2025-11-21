@@ -12,6 +12,8 @@ const MAIL_EVENT_TYPES = {
   BATCH_UPLOADED: 'batch_uploaded',
 };
 
+const STAFF_ROLES = ['admin', 'uploader'];
+
 async function getMailRecipientsByEvent(eventType) {
   try {
     const { data, error } = await supabase
@@ -29,22 +31,52 @@ async function getMailRecipientsByEvent(eventType) {
   }
 }
 
-async function getUploaderEmailByBatch(batch) {
+async function getUploaderByBatch(batch) {
   if (!batch?.uploader_id) return null;
 
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('email, name')
+      .select('id, email, name')
       .eq('id', batch.uploader_id)
       .maybeSingle();
 
     if (error) throw error;
-    return data?.email || null;
+    return data || null;
   } catch (error) {
     console.error('查詢上傳者資料失敗:', error);
     return null;
   }
+}
+
+async function getStaffRecipients(excludeIds = []) {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, name')
+      .in('role', STAFF_ROLES);
+
+    if (error) throw error;
+    return (data || [])
+      .filter((profile) => profile.email)
+      .filter((profile) => !excludeIds.includes(profile.id));
+  } catch (error) {
+    console.error('取得內部收件人失敗:', error);
+    return [];
+  }
+}
+
+function mergeRecipients(...lists) {
+  const emails = new Map();
+  lists.flat().forEach((recipient) => {
+    if (!recipient) return;
+    const email = typeof recipient === 'string' ? recipient : recipient.email;
+    if (!email) return;
+    if (!emails.has(email)) {
+      emails.set(email, email);
+    }
+  });
+  return Array.from(emails.values());
 }
 
 /**
@@ -122,8 +154,22 @@ export async function notifyCustomersNewList(batchId, batchName) {
     await Promise.all(emailPromises);
     console.log(`✅ 已發送通知給 ${customers.length} 位客戶`);
 
-    // 通知內部訂閱者
-    const internalRecipients = await getMailRecipientsByEvent(MAIL_EVENT_TYPES.BATCH_UPLOADED);
+    // 通知內部訂閱者（預設 + 自訂）
+    const { data: batch } = await supabase
+      .from('batches')
+      .select('id, uploader_id')
+      .eq('id', batchId)
+      .maybeSingle();
+
+    const uploaderProfile = await getUploaderByBatch(batch);
+    const defaultStaff = await getStaffRecipients(
+      uploaderProfile?.id ? [uploaderProfile.id] : []
+    );
+    const internalRecipients = mergeRecipients(
+      defaultStaff.map((staff) => staff.email),
+      await getMailRecipientsByEvent(MAIL_EVENT_TYPES.BATCH_UPLOADED)
+    );
+
     if (internalRecipients.length > 0) {
       const { count: videoCount } = await supabase
         .from('videos')
@@ -197,20 +243,15 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       .eq('id', batchId)
       .maybeSingle();
 
-    const recipients = new Set();
-    if (adminEmail) {
-      recipients.add(adminEmail);
-    }
+    const uploaderProfile = await getUploaderByBatch(batch);
 
-    const uploaderEmail = await getUploaderEmailByBatch(batch);
-    if (uploaderEmail) {
-      recipients.add(uploaderEmail);
-    }
+    const recipients = mergeRecipients(
+      adminEmail ? [adminEmail] : [],
+      uploaderProfile?.email,
+      await getMailRecipientsByEvent(MAIL_EVENT_TYPES.SELECTION_SUBMITTED)
+    );
 
-    const customRecipients = await getMailRecipientsByEvent(MAIL_EVENT_TYPES.SELECTION_SUBMITTED);
-    customRecipients.forEach((email) => recipients.add(email));
-
-    if (recipients.size === 0) {
+    if (recipients.length === 0) {
       console.warn('找不到任何選擇通知收件人，已跳過寄信');
       return;
     }
@@ -288,7 +329,7 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
     `;
     
     await Promise.all(
-      Array.from(recipients).map((email) =>
+      recipients.map((email) =>
         sendEmail({
           to: email,
           subject: `客戶影片選擇通知 - ${customerName}`,
@@ -297,7 +338,7 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       )
     );
     
-    console.log(`✅ 已發送通知給 ${recipients.size} 位收件人`);
+    console.log(`✅ 已發送通知給 ${recipients.length} 位收件人`);
     
   } catch (error) {
     console.error('通知管理員錯誤:', error);

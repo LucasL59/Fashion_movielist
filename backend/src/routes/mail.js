@@ -10,14 +10,26 @@ import { supabase } from '../config/supabase.js'
 const router = express.Router()
 
 const EVENT_TYPES = ['selection_submitted', 'batch_uploaded']
+const STAFF_ROLES = ['admin', 'uploader']
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+async function fetchStaffProfiles() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, email, role')
+    .in('role', STAFF_ROLES)
+    .order('name', { ascending: true })
+
+  if (error) throw error
+  return data || []
+}
+
 /**
  * GET /api/mail-rules
- * 取得所有郵件規則，可透過 eventType 過濾
+ * 取得郵件規則與可選用戶
  */
 router.get('/', async (req, res) => {
   try {
@@ -32,12 +44,18 @@ router.get('/', async (req, res) => {
       query = query.eq('event_type', eventType)
     }
 
-    const { data, error } = await query
+    const [{ data, error }, staff] = await Promise.all([
+      query,
+      fetchStaffProfiles(),
+    ])
     if (error) throw error
 
     res.json({
       success: true,
-      data: data || [],
+      data: {
+        rules: data || [],
+        availableUsers: staff,
+      },
     })
   } catch (error) {
     console.error('取得郵件規則失敗:', error)
@@ -54,7 +72,7 @@ router.get('/', async (req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { eventType, recipientName, recipientEmail, createdBy } = req.body
+    const { eventType, recipientName, recipientEmail, createdBy, profileId } = req.body
 
     if (!EVENT_TYPES.includes(eventType)) {
       return res.status(400).json({
@@ -63,7 +81,29 @@ router.post('/', async (req, res) => {
       })
     }
 
-    if (!isValidEmail(recipientEmail)) {
+    let finalName = recipientName
+    let finalEmail = recipientEmail
+    let profileReference = profileId || null
+
+    if (profileId) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .eq('id', profileId)
+        .maybeSingle()
+
+      if (profileError) throw profileError
+      if (!profile) {
+        return res.status(400).json({
+          error: 'ValidationError',
+          message: '找不到指定的使用者',
+        })
+      }
+      finalName = profile.name
+      finalEmail = profile.email
+    }
+
+    if (!finalEmail || !isValidEmail(finalEmail)) {
       return res.status(400).json({
         error: 'ValidationError',
         message: 'Email 格式不正確',
@@ -74,8 +114,9 @@ router.post('/', async (req, res) => {
       .from('mail_rules')
       .insert({
         event_type: eventType,
-        recipient_name: recipientName,
-        recipient_email: recipientEmail,
+        recipient_name: finalName,
+        recipient_email: finalEmail,
+        profile_id: profileReference,
         created_by: createdBy || null,
       })
       .select()
@@ -103,22 +144,43 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params
-    const { recipientName, recipientEmail } = req.body
-
-    if (recipientEmail && !isValidEmail(recipientEmail)) {
-      return res.status(400).json({
-        error: 'ValidationError',
-        message: 'Email 格式不正確',
-      })
-    }
+    const { recipientName, recipientEmail, profileId } = req.body
 
     const updatePayload = {}
-    if (typeof recipientName === 'string') {
-      updatePayload.recipient_name = recipientName
+
+    if (profileId) {
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .eq('id', profileId)
+        .maybeSingle()
+
+      if (profileError) throw profileError
+      if (!profile) {
+        return res.status(400).json({
+          error: 'ValidationError',
+          message: '找不到指定的使用者',
+        })
+      }
+      updatePayload.profile_id = profile.id
+      updatePayload.recipient_name = profile.name
+      updatePayload.recipient_email = profile.email
+    } else {
+      if (recipientName !== undefined) {
+        updatePayload.recipient_name = recipientName
+        updatePayload.profile_id = null
+      }
+      if (recipientEmail) {
+        if (!isValidEmail(recipientEmail)) {
+          return res.status(400).json({
+            error: 'ValidationError',
+            message: 'Email 格式不正確',
+          })
+        }
+        updatePayload.recipient_email = recipientEmail
+      }
     }
-    if (recipientEmail) {
-      updatePayload.recipient_email = recipientEmail
-    }
+
     updatePayload.updated_at = new Date().toISOString()
 
     const { data, error } = await supabase
