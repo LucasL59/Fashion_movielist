@@ -12,8 +12,6 @@ const MAIL_EVENT_TYPES = {
   BATCH_UPLOADED: 'batch_uploaded',
 };
 
-const STAFF_ROLES = ['admin', 'uploader'];
-
 async function getMailRecipientsByEvent(eventType) {
   try {
     const { data, error } = await supabase
@@ -53,8 +51,7 @@ async function getStaffRecipients(excludeIds = []) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, name')
-      .in('role', STAFF_ROLES);
+      .select('id, email, name');
 
     if (error) throw error;
     return (data || [])

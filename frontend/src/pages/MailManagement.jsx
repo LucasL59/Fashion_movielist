@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Mail, ShieldCheck } from 'lucide-react'
+import { Plus, Trash2, Mail, ShieldCheck, Info } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createMailRule, deleteMailRule, getMailRules } from '../lib/api'
 
@@ -18,7 +18,7 @@ const MAIL_EVENTS = [
   {
     value: 'batch_uploaded',
     label: '新影片清單上傳',
-    description: '有新的影片清單上架時通知輸控團隊（預設：僅客戶通知，不會寄內部信）',
+    description: '有新的影片清單上架時通知輸控團隊（預設：通知所有使用者，實際寄信時會排除上傳者本人）',
   },
 ]
 
@@ -36,6 +36,10 @@ export default function MailManagement() {
   const { user } = useAuth()
   const [rules, setRules] = useState([])
   const [availableUsers, setAvailableUsers] = useState([])
+  const [defaultRecipients, setDefaultRecipients] = useState({
+    selection_submitted: [],
+    batch_uploaded: [],
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [formState, setFormState] = useState(initialFormState)
@@ -53,6 +57,7 @@ export default function MailManagement() {
       const response = await getMailRules()
       setRules(response.data?.rules || [])
       setAvailableUsers(response.data?.availableUsers || [])
+      setDefaultRecipients(response.data?.defaults || {})
     } catch (err) {
       console.error('載入郵件規則失敗:', err)
       setError('無法取得郵件設定，請稍後再試。')
@@ -180,6 +185,30 @@ export default function MailManagement() {
             </div>
 
             <div className="space-y-3">
+              <div className="bg-white border border-dashed border-primary-200 rounded-xl px-4 py-3">
+                <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                  <Info className="h-4 w-4 text-primary-600" />
+                  預設通知對象
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(defaultRecipients[event.value] || []).map((recipient) => (
+                    <span
+                      key={recipient.id || recipient.email || recipient.name}
+                      className="inline-flex items-center rounded-full bg-primary-50 text-primary-700 px-3 py-1 text-xs"
+                    >
+                      {recipient.name}
+                      {recipient.email && <span className="text-gray-500 ml-1">（{recipient.email}）</span>}
+                      {recipient.description && (
+                        <span className="text-gray-500 ml-1 text-[11px]">{recipient.description}</span>
+                      )}
+                    </span>
+                  ))}
+                  {(defaultRecipients[event.value] || []).length === 0 && (
+                    <span className="text-xs text-gray-500">尚未設定預設通知對象</span>
+                  )}
+                </div>
+              </div>
+
               {event.recipients.length === 0 && (
                 <p className="text-sm text-gray-500">目前尚未設定額外收件人。</p>
               )}

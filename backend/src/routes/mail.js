@@ -10,17 +10,15 @@ import { supabase } from '../config/supabase.js'
 const router = express.Router()
 
 const EVENT_TYPES = ['selection_submitted', 'batch_uploaded']
-const STAFF_ROLES = ['admin', 'uploader']
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-async function fetchStaffProfiles() {
+async function fetchAllProfiles() {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, name, email, role')
-    .in('role', STAFF_ROLES)
     .order('name', { ascending: true })
 
   if (error) throw error
@@ -44,17 +42,35 @@ router.get('/', async (req, res) => {
       query = query.eq('event_type', eventType)
     }
 
-    const [{ data, error }, staff] = await Promise.all([
+    const [{ data, error }, users] = await Promise.all([
       query,
-      fetchStaffProfiles(),
+      fetchAllProfiles(),
     ])
     if (error) throw error
+
+    const defaults = {
+      selection_submitted: [
+        {
+          id: 'dynamic-uploader',
+          name: '該批次上傳者',
+          email: '-',
+          description: '系統會根據實際上傳此批次的使用者自動通知',
+        },
+      ],
+      batch_uploaded: (users || []).map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      })),
+    }
 
     res.json({
       success: true,
       data: {
         rules: data || [],
-        availableUsers: staff,
+        availableUsers: users || [],
+        defaults,
       },
     })
   } catch (error) {
