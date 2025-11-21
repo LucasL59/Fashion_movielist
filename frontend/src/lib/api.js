@@ -162,6 +162,29 @@ export async function getUserSelections(userId) {
 }
 
 /**
+ * 郵件規則相關 API
+ */
+export async function getMailRules(params = {}) {
+  const response = await api.get('/api/mail-rules', { params })
+  return response.data
+}
+
+export async function createMailRule(data) {
+  const response = await api.post('/api/mail-rules', data)
+  return response.data
+}
+
+export async function updateMailRule(id, data) {
+  const response = await api.put(`/api/mail-rules/${id}`, data)
+  return response.data
+}
+
+export async function deleteMailRule(id) {
+  const response = await api.delete(`/api/mail-rules/${id}`)
+  return response.data
+}
+
+/**
  * 獲取批次的所有選擇（管理員）
  */
 export async function getBatchSelections(batchId) {

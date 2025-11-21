@@ -1,0 +1,210 @@
+/**
+ * 郵件管理頁面
+ *
+ * 允許管理員設定不同事件的通知收件人
+ */
+
+import { useEffect, useMemo, useState } from 'react'
+import { Plus, Trash2, Mail, ShieldCheck } from 'lucide-react'
+import { useAuth } from '../contexts/AuthContext'
+import { createMailRule, deleteMailRule, getMailRules } from '../lib/api'
+
+const MAIL_EVENTS = [
+  {
+    value: 'selection_submitted',
+    label: '客戶提交影片選擇',
+    description: '客戶完成影片挑選後通知相關人員（預設：系統管理員、該批次上傳者）',
+  },
+  {
+    value: 'batch_uploaded',
+    label: '新影片清單上傳',
+    description: '有新的影片清單上架時通知輸控團隊（預設：僅客戶通知，不會寄內部信）',
+  },
+]
+
+const initialFormState = MAIL_EVENTS.reduce((acc, event) => {
+  acc[event.value] = { name: '', email: '' }
+  return acc
+}, {})
+
+export default function MailManagement() {
+  const { user } = useAuth()
+  const [rules, setRules] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [formState, setFormState] = useState(initialFormState)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    loadMailRules()
+  }, [])
+
+  async function loadMailRules() {
+    try {
+      setLoading(true)
+      setError('')
+      const response = await getMailRules()
+      setRules(response.data || [])
+    } catch (err) {
+      console.error('載入郵件規則失敗:', err)
+      setError('無法取得郵件設定，請稍後再試。')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function handleAddRecipient(eventType) {
+    const payload = formState[eventType]
+    if (!payload.email) {
+      setError('請輸入 Email')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      await createMailRule({
+        eventType,
+        recipientName: payload.name,
+        recipientEmail: payload.email,
+        createdBy: user?.id,
+      })
+      setFormState((prev) => ({
+        ...prev,
+        [eventType]: { name: '', email: '' },
+      }))
+      await loadMailRules()
+    } catch (err) {
+      console.error('新增收件人失敗:', err)
+      setError(err.response?.data?.message || '新增收件人失敗，請確認 Email 格式。')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleDeleteRecipient(ruleId) {
+    if (!ruleId) return
+    try {
+      await deleteMailRule(ruleId)
+      await loadMailRules()
+    } catch (err) {
+      console.error('刪除收件人失敗:', err)
+      setError('刪除失敗，請稍後再試。')
+    }
+  }
+
+  const groupedRules = useMemo(() => {
+    return MAIL_EVENTS.map((event) => ({
+      ...event,
+      recipients: rules.filter((rule) => rule.event_type === event.value),
+    }))
+  }, [rules])
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">郵件通知管理</h1>
+        <p className="text-gray-600 mt-2">
+          設定不同事件的通知對象，確保所有關係人都能即時收到訊息。
+        </p>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-gray-500">
+          <div className="spinner"></div>
+          載入郵件規則中...
+        </div>
+      ) : (
+        groupedRules.map((event) => (
+          <section key={event.value} className="card space-y-4">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-3">
+                <Mail className="h-5 w-5 text-primary-600" />
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">{event.label}</h2>
+                  <p className="text-sm text-gray-500">{event.description}</p>
+                </div>
+              </div>
+              {event.value === 'selection_submitted' && (
+                <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                  <ShieldCheck className="h-4 w-4" />
+                  系統預設會通知：管理員 Email（環境變數）與該批次的上傳者，您可以另外加上其他收件人。
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {event.recipients.length === 0 && (
+                <p className="text-sm text-gray-500">目前尚未設定額外收件人。</p>
+              )}
+              {event.recipients.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="flex items-center justify-between rounded-xl border border-gray-100 bg-primary-50/50 px-4 py-3"
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{rule.recipient_name || '未命名'}</p>
+                    <p className="text-sm text-gray-600">{rule.recipient_email}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteRecipient(rule.id)}
+                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                    title="移除收件人"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-3">新增收件人</p>
+              <div className="flex flex-col md:flex-row gap-3">
+                <input
+                  type="text"
+                  className="input flex-1"
+                  placeholder="顯示名稱（選填）"
+                  value={formState[event.value].name}
+                  onChange={(e) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      [event.value]: { ...prev[event.value], name: e.target.value },
+                    }))
+                  }
+                />
+                <input
+                  type="email"
+                  className="input flex-1"
+                  placeholder="收件人 Email"
+                  value={formState[event.value].email}
+                  onChange={(e) =>
+                    setFormState((prev) => ({
+                      ...prev,
+                      [event.value]: { ...prev[event.value], email: e.target.value },
+                    }))
+                  }
+                />
+                <button
+                  type="button"
+                  className="btn-primary flex items-center justify-center gap-2"
+                  onClick={() => handleAddRecipient(event.value)}
+                  disabled={submitting}
+                >
+                  <Plus className="h-4 w-4" />
+                  新增
+                </button>
+              </div>
+            </div>
+          </section>
+        ))
+      )}
+    </div>
+  )
+}
+

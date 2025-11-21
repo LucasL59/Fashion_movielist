@@ -26,7 +26,7 @@ services:
       - key: ADMIN_EMAIL
         sync: false
       - key: FRONTEND_URL
-        value: https://your-frontend-url.vercel.app
+        value: https://fashion-movielist.vercel.app
       - key: REMINDER_CRON_SCHEDULE
         value: 0 9 1 * *
     healthCheckPath: /health

@@ -221,7 +221,41 @@ CREATE POLICY "Admins can view all selections"
   );
 
 -- ==========================================
--- 5. 建立觸發器（自動更新 updated_at）
+-- 5. 建立 Mail Rules 表（郵件通知設定）
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.mail_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_type TEXT NOT NULL CHECK (event_type IN ('selection_submitted', 'batch_uploaded')),
+  recipient_name TEXT,
+  recipient_email TEXT NOT NULL,
+  created_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_mail_rules_event ON public.mail_rules(event_type);
+CREATE INDEX IF NOT EXISTS idx_mail_rules_recipient ON public.mail_rules(recipient_email);
+
+ALTER TABLE public.mail_rules ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admins can manage mail rules"
+  ON public.mail_rules
+  FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
+-- ==========================================
+-- 6. 建立觸發器（自動更新 updated_at）
 -- ==========================================
 
 -- 建立觸發器函數
@@ -255,7 +289,7 @@ CREATE TRIGGER set_selections_updated_at
   EXECUTE FUNCTION public.handle_updated_at();
 
 -- ==========================================
--- 6. 建立 Storage Bucket（影片縮圖）
+-- 7. 建立 Storage Bucket（影片縮圖）
 -- ==========================================
 
 -- 注意：此操作需要在 Supabase Dashboard 的 Storage 頁面手動建立
@@ -296,7 +330,7 @@ CREATE POLICY "Admins can delete thumbnails"
   );
 
 -- ==========================================
--- 7. 建立註冊時自動建立 Profile 的觸發器
+-- 8. 建立註冊時自動建立 Profile 的觸發器
 -- ==========================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -319,7 +353,7 @@ CREATE TRIGGER on_auth_user_created
   EXECUTE FUNCTION public.handle_new_user();
 
 -- ==========================================
--- 8. 建立視圖（方便查詢）
+-- 9. 建立視圖（方便查詢）
 -- ==========================================
 
 -- 批次統計視圖
@@ -349,6 +383,6 @@ SELECT
 FROM information_schema.tables t
 WHERE table_schema = 'public' 
   AND table_type = 'BASE TABLE'
-  AND table_name IN ('profiles', 'batches', 'videos', 'selections')
+  AND table_name IN ('profiles', 'batches', 'videos', 'selections', 'mail_rules')
 ORDER BY table_name;
 

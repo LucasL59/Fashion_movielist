@@ -20,6 +20,7 @@ import videoRoutes from './routes/videos.js';
 import selectionRoutes from './routes/selections.js';
 import reminderRoutes from './routes/reminders.js';
 import dashboardRoutes from './routes/dashboard.js';
+import mailRoutes from './routes/mail.js';
 
 // 導入服務
 import { initializeReminderScheduler } from './services/reminderService.js';
@@ -70,6 +71,7 @@ app.use('/api/videos', videoRoutes);
 app.use('/api/selections', selectionRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/mail-rules', mailRoutes);
 
 // ==================== 錯誤處理 ====================
 

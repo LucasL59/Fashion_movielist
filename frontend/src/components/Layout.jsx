@@ -6,7 +6,7 @@
 
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, LogOut, Settings, Upload, List, Users, Edit } from 'lucide-react'
+import { Film, LogOut, Settings, Upload, List, Users, Edit, Mail } from 'lucide-react'
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
@@ -60,6 +60,15 @@ export default function Layout({ children }) {
                       >
                         <Users className="h-4 w-4 mr-2" />
                         用戶管理
+                      </Link>
+                    )}
+                    {user?.role === 'admin' && (
+                      <Link
+                        to="/mail"
+                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-gray-700 hover:text-primary-600 transition-colors"
+                      >
+                        <Mail className="h-4 w-4 mr-2" />
+                        郵件管理
                       </Link>
                     )}
                   </>

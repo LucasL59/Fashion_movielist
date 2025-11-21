@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { AlertCircle, BarChart3, Clock, RefreshCw, Upload } from 'lucide-react'
+import { AlertCircle, BarChart3, Clock, RefreshCw, Upload, CheckCircle2, Clock3 } from 'lucide-react'
 import { getAdminDashboardOverview } from '../lib/api'
 
 export default function AdminDashboard() {
@@ -43,6 +43,14 @@ export default function AdminDashboard() {
   const submittedCount = overview?.submittedCount || 0
   const pendingCount = overview?.pendingCount ?? Math.max(totalCustomers - submittedCount, 0)
   const completionRate = totalCustomers ? Math.round((submittedCount / totalCustomers) * 100) : 0
+
+  const [statusFilter, setStatusFilter] = useState('all')
+  const selectionDetails = overview?.selectionDetails || []
+
+  const filteredDetails = selectionDetails.filter((detail) => {
+    if (statusFilter === 'all') return true
+    return detail.status === statusFilter
+  })
 
   return (
     <div className="space-y-8">
@@ -128,6 +136,92 @@ export default function AdminDashboard() {
         </div>
       )}
 
+      {/* 選擇進度明細 */}
+      <div className="card">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">客戶選擇明細</h2>
+            <p className="text-sm text-gray-500">即時掌握誰已完成、誰尚未提交</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 'all', label: '全部', count: selectionDetails.length },
+              { value: 'submitted', label: '已完成', count: submittedCount },
+              { value: 'pending', label: '待提交', count: pendingCount },
+            ].map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                onClick={() => setStatusFilter(filter.value)}
+                className={`px-4 py-2 rounded-full border transition-colors ${
+                  statusFilter === filter.value
+                    ? 'bg-primary-600 text-white border-primary-600'
+                    : 'border-gray-200 text-gray-600 hover:border-primary-200 hover:text-primary-600'
+                }`}
+              >
+                {filter.label}（{filter.count}）
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <table className="min-w-full divide-y divide-gray-100">
+            <thead>
+              <tr className="text-left text-xs font-semibold uppercase text-gray-500 tracking-wider">
+                <th className="px-4 py-3">客戶名稱</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">狀態</th>
+                <th className="px-4 py-3">選擇數量</th>
+                <th className="px-4 py-3">提交時間</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filteredDetails.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
+                    {statusFilter === 'pending'
+                      ? '太棒了！所有客戶都已完成提交。'
+                      : '目前沒有符合條件的資料。'}
+                  </td>
+                </tr>
+              )}
+              {filteredDetails.map((detail) => (
+                <tr key={detail.id} className="hover:bg-primary-50/50 transition-colors">
+                  <td className="px-4 py-3">
+                    <p className="font-medium text-gray-900">{detail.name || '—'}</p>
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500">{detail.email}</td>
+                  <td className="px-4 py-3">
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${
+                        detail.status === 'submitted'
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'bg-amber-50 text-amber-700'
+                      }`}
+                    >
+                      {detail.status === 'submitted' ? (
+                        <CheckCircle2 className="h-4 w-4" />
+                      ) : (
+                        <Clock3 className="h-4 w-4" />
+                      )}
+                      {detail.status === 'submitted' ? '已完成' : '待提交'}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-gray-900 font-semibold">
+                    {detail.videoCount || 0} 部
+                  </td>
+                  <td className="px-4 py-3 text-sm text-gray-500">
+                    {detail.submittedAt
+                      ? new Date(detail.submittedAt).toLocaleString('zh-TW')
+                      : '—'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   )
 }
