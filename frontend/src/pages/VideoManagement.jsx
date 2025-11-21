@@ -1,0 +1,214 @@
+/**
+ * 影片管理頁面（Admin 和 Uploader）
+ * 
+ * 查看和編輯影片清單
+ */
+
+import { useState, useEffect } from 'react'
+import { useAuth } from '../contexts/AuthContext'
+import { Film, Calendar, Loader, AlertCircle, Edit } from 'lucide-react'
+import MovieCard from '../components/MovieCard'
+import VideoEditModal from '../components/VideoEditModal'
+import { getLatestVideos, getVideosByMonth, getAvailableMonths } from '../lib/api'
+
+export default function VideoManagement() {
+  const { user } = useAuth()
+  const [batch, setBatch] = useState(null)
+  const [videos, setVideos] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  
+  // 月份選擇相關
+  const [availableMonths, setAvailableMonths] = useState([])
+  const [selectedMonth, setSelectedMonth] = useState('')
+  const [loadingMonths, setLoadingMonths] = useState(true)
+  
+  // 編輯相關
+  const [editingVideo, setEditingVideo] = useState(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  
+  useEffect(() => {
+    loadMonths()
+  }, [])
+  
+  useEffect(() => {
+    if (selectedMonth) {
+      loadVideosByMonth(selectedMonth)
+    }
+  }, [selectedMonth])
+  
+  async function loadMonths() {
+    try {
+      setLoadingMonths(true)
+      const response = await getAvailableMonths()
+      const months = response.data || []
+      setAvailableMonths(months)
+      
+      // 預設選擇當月
+      const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
+      if (months.includes(currentMonth)) {
+        setSelectedMonth(currentMonth)
+      } else if (months.length > 0) {
+        // 如果當月沒有，選擇最新的月份
+        setSelectedMonth(months[0])
+      } else {
+        // 沒有任何月份，載入最新的
+        loadVideos()
+      }
+    } catch (error) {
+      console.error('載入月份列表失敗:', error)
+      // 如果載入月份失敗，直接載入最新影片
+      loadVideos()
+    } finally {
+      setLoadingMonths(false)
+    }
+  }
+  
+  async function loadVideos() {
+    try {
+      setLoading(true)
+      const response = await getLatestVideos()
+      setBatch(response.data.batch)
+      setVideos(response.data.videos || [])
+    } catch (error) {
+      console.error('載入影片失敗:', error)
+      setError('載入影片清單失敗')
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  async function loadVideosByMonth(month) {
+    try {
+      setLoading(true)
+      setError('')
+      const response = await getVideosByMonth(month)
+      setBatch(response.data.batch)
+      setVideos(response.data.videos || [])
+    } catch (error) {
+      console.error('載入影片失敗:', error)
+      setError('載入影片清單失敗')
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  function handleEdit(video) {
+    setEditingVideo(video)
+    setShowEditModal(true)
+  }
+  
+  function handleEditSuccess() {
+    // 重新載入影片列表
+    if (selectedMonth) {
+      loadVideosByMonth(selectedMonth)
+    } else {
+      loadVideos()
+    }
+  }
+  
+  function formatMonth(monthStr) {
+    if (!monthStr) return ''
+    const [year, month] = monthStr.split('-')
+    return `${year}年${parseInt(month)}月`
+  }
+  
+  if (loadingMonths || loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader className="h-12 w-12 text-primary-600 animate-spin" />
+      </div>
+    )
+  }
+  
+  return (
+    <div className="space-y-8">
+      {/* 標題與月份選擇器 */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">影片管理</h1>
+          <p className="text-gray-600 mt-2">
+            {batch ? `${batch.name}` : '請選擇月份查看影片清單'}
+          </p>
+        </div>
+        
+        {/* 月份選擇器 */}
+        {availableMonths.length > 0 && (
+          <div className="flex items-center gap-3">
+            <Calendar className="h-5 w-5 text-gray-500" />
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="select min-w-[150px]"
+            >
+              {availableMonths.map((month) => (
+                <option key={month} value={month}>
+                  {formatMonth(month)}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+      
+      {/* 錯誤訊息 */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 fade-in">
+          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-red-800">{error}</p>
+        </div>
+      )}
+      
+      {/* 影片清單 */}
+      {!batch || videos.length === 0 ? (
+        <div className="card text-center py-12">
+          <Film className="h-16 w-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">暫無影片清單</h2>
+          <p className="text-gray-600">
+            {selectedMonth ? `${formatMonth(selectedMonth)}沒有影片` : '目前沒有影片'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* 統計資訊 */}
+          <div className="card bg-primary-50 border-primary-200">
+            <div className="flex items-center gap-3">
+              <Film className="h-6 w-6 text-primary-600" />
+              <div>
+                <p className="text-sm text-gray-600">總影片數</p>
+                <p className="text-2xl font-bold text-primary-600">
+                  {videos.length} <span className="text-base font-normal text-gray-600">部</span>
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* 影片網格 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {videos.map((video) => (
+              <MovieCard
+                key={video.id}
+                video={video}
+                showEdit={true}
+                onEdit={handleEdit}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      
+      {/* 編輯對話框 */}
+      {showEditModal && editingVideo && (
+        <VideoEditModal
+          video={editingVideo}
+          onClose={() => {
+            setShowEditModal(false)
+            setEditingVideo(null)
+          }}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+    </div>
+  )
+}
+
