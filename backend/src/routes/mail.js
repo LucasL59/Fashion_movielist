@@ -15,6 +15,14 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
+function getAdminEmails() {
+  const raw = process.env.ADMIN_EMAIL || ''
+  return raw
+    .split(',')
+    .map((email) => email.trim())
+    .filter(Boolean)
+}
+
 async function fetchAllProfiles() {
   const { data, error } = await supabase
     .from('profiles')
@@ -23,6 +31,38 @@ async function fetchAllProfiles() {
 
   if (error) throw error
   return data || []
+}
+
+function buildDefaultRecipients(users) {
+  const adminEntries = getAdminEmails().map((email, index) => ({
+    id: `admin-${index}`,
+    name: '系統管理員',
+    email,
+    description: '',
+  }))
+
+  return {
+    selection_submitted: [
+      ...adminEntries,
+      {
+        id: 'dynamic-uploader',
+        name: '該批次上傳者',
+        email: '—',
+        description: '實際寄信時會依照批次上傳者自動加入並排除重複',
+      },
+    ],
+    batch_uploaded: (users || []).map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      description:
+        user.role === 'admin'
+          ? '系統管理員'
+          : user.role === 'uploader'
+          ? '上傳者'
+          : '客戶',
+    })),
+  }
 }
 
 /**
@@ -48,29 +88,12 @@ router.get('/', async (req, res) => {
     ])
     if (error) throw error
 
-    const defaults = {
-      selection_submitted: [
-        {
-          id: 'dynamic-uploader',
-          name: '該批次上傳者',
-          email: '-',
-          description: '系統會根據實際上傳此批次的使用者自動通知',
-        },
-      ],
-      batch_uploaded: (users || []).map((user) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-      })),
-    }
-
     res.json({
       success: true,
       data: {
         rules: data || [],
         availableUsers: users || [],
-        defaults,
+        defaults: buildDefaultRecipients(users),
       },
     })
   } catch (error) {
@@ -97,8 +120,8 @@ router.post('/', async (req, res) => {
       })
     }
 
-    let finalName = recipientName
-    let finalEmail = recipientEmail
+    let finalName = recipientName?.trim()
+    let finalEmail = recipientEmail?.trim()
     let profileReference = profileId || null
 
     if (profileId) {
@@ -123,6 +146,19 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         error: 'ValidationError',
         message: 'Email 格式不正確',
+      })
+    }
+
+    const { count: existsCount } = await supabase
+      .from('mail_rules')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_type', eventType)
+      .eq('recipient_email', finalEmail)
+
+    if (existsCount) {
+      return res.status(400).json({
+        error: 'DuplicateRecipient',
+        message: '此收件人已在通知清單中',
       })
     }
 
