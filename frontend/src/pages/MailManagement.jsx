@@ -45,6 +45,7 @@ export default function MailManagement() {
   const [formState, setFormState] = useState(initialFormState)
   const [userSelectState, setUserSelectState] = useState(initialUserSelectState)
   const [submitting, setSubmitting] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState(null)
 
   useEffect(() => {
     loadMailRules()
@@ -121,7 +122,7 @@ export default function MailManagement() {
     }
   }
 
-  async function handleDeleteRecipient(ruleId) {
+  async function deleteRecipient(ruleId) {
     if (!ruleId) return
     try {
       await deleteMailRule(ruleId)
@@ -129,6 +130,15 @@ export default function MailManagement() {
     } catch (err) {
       console.error('刪除收件人失敗:', err)
       setError('刪除失敗，請稍後再試。')
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return
+    try {
+      await deleteRecipient(pendingDelete.id)
+    } finally {
+      setPendingDelete(null)
     }
   }
 
@@ -140,7 +150,8 @@ export default function MailManagement() {
   }, [rules])
 
   return (
-    <div className="space-y-8">
+    <>
+      <div className="space-y-8">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">郵件通知管理</h1>
         <p className="text-gray-600 mt-2">
@@ -223,7 +234,7 @@ export default function MailManagement() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => handleDeleteRecipient(rule.id)}
+                    onClick={() => setPendingDelete(rule)}
                     className="p-2 text-gray-400 hover:text-red-500 transition-colors"
                     title="移除收件人"
                   >
@@ -309,6 +320,36 @@ export default function MailManagement() {
         ))
       )}
     </div>
+
+      {pendingDelete && (
+        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">確認移除收件人</h3>
+              <p className="text-sm text-gray-600 mt-2">
+                確定要移除「{pendingDelete.recipient_name || pendingDelete.recipient_email}」嗎？
+              </p>
+            </div>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => setPendingDelete(null)}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                className="btn-primary bg-red-600 hover:bg-red-700 border-none"
+                onClick={handleConfirmDelete}
+              >
+                確認刪除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 

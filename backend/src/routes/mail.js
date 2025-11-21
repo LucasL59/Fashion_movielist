@@ -65,6 +65,16 @@ function buildDefaultRecipients(users) {
   }
 }
 
+function getDefaultEmails(eventType, users = []) {
+  if (eventType === 'selection_submitted') {
+    return getAdminEmails()
+  }
+  if (eventType === 'batch_uploaded') {
+    return (users || []).map((user) => user.email).filter(Boolean)
+  }
+  return []
+}
+
 /**
  * GET /api/mail-rules
  * 取得郵件規則與可選用戶
@@ -146,6 +156,16 @@ router.post('/', async (req, res) => {
       return res.status(400).json({
         error: 'ValidationError',
         message: 'Email 格式不正確',
+      })
+    }
+
+    const usersForDefaults =
+      eventType === 'batch_uploaded' ? await fetchAllProfiles() : []
+    const defaultEmails = getDefaultEmails(eventType, usersForDefaults)
+    if (defaultEmails.includes(finalEmail)) {
+      return res.status(400).json({
+        error: 'DuplicateRecipient',
+        message: '此收件人已包含在預設通知對象中',
       })
     }
 
