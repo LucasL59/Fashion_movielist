@@ -1,36 +1,36 @@
 /**
- * 影片選擇頁面
+ * 影片選擇頁面 - Modern Refined
  * 
  * 顯示影片清單並允許客戶選擇，支援月份選擇
  */
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon } from 'lucide-react'
+import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Filter } from 'lucide-react'
 import MovieCard from '../components/MovieCard'
-import { getLatestVideos, getVideosByMonth, getAvailableMonths, submitSelection } from '../lib/api'
+import Select from '../components/Select'
+import { getLatestVideos, getAvailableMonths, submitSelection } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../contexts/ToastContext'
 
 export default function MovieSelection() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [batch, setBatch] = useState(null)
   const [videos, setVideos] = useState([])
   const [selectedIds, setSelectedIds] = useState([])
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess] = useState(false)
-  const [error, setError] = useState('')
   
   // 月份選擇相關
   const [availableMonths, setAvailableMonths] = useState([])
   const [selectedMonth, setSelectedMonth] = useState('')
   const [loadingMonths, setLoadingMonths] = useState(true)
   
-  // 視圖模式：'grid' 或 'list'
   const [viewMode, setViewMode] = useState('grid')
   
   // 分頁設定
-  const PAGE_SIZE = 10
+  const PAGE_SIZE = 12 // Increased for grid layout
   const [currentPage, setCurrentPage] = useState(1)
   const [showAllPages, setShowAllPages] = useState(false)
   
@@ -53,7 +53,6 @@ export default function MovieSelection() {
   
   async function loadPreviousSelection() {
     try {
-      // 查詢用戶在當前批次的選擇記錄
       const { data, error } = await supabase
         .from('selections')
         .select('video_ids')
@@ -63,21 +62,13 @@ export default function MovieSelection() {
         .limit(1)
         .single()
       
-      if (error) {
-        // 如果沒有找到記錄，這是正常的
-        if (error.code === 'PGRST116') {
-          return
-        }
-        throw error
-      }
+      if (error && error.code !== 'PGRST116') throw error
       
-      // 設定已選擇的影片
       if (data && data.video_ids) {
         setSelectedIds(data.video_ids)
       }
     } catch (error) {
       console.error('載入之前的選擇失敗:', error)
-      // 不顯示錯誤，因為這不是關鍵功能
     }
   }
   
@@ -88,20 +79,16 @@ export default function MovieSelection() {
       const months = response.data || []
       setAvailableMonths(months)
       
-      // 預設選擇當月
-      const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
+      const currentMonth = new Date().toISOString().slice(0, 7)
       if (months.includes(currentMonth)) {
         setSelectedMonth(currentMonth)
       } else if (months.length > 0) {
-        // 如果當月沒有，選擇最新的月份
         setSelectedMonth(months[0])
       } else {
-        // 沒有任何月份，載入最新的
         loadVideos()
       }
     } catch (error) {
       console.error('載入月份列表失敗:', error)
-      // 如果載入月份失敗，直接載入最新影片
       loadVideos()
     } finally {
       setLoadingMonths(false)
@@ -119,7 +106,7 @@ export default function MovieSelection() {
       setShowAllPages(false)
     } catch (error) {
       console.error('載入影片失敗:', error)
-      setError('載入影片清單失敗')
+      showToast('載入影片清單失敗', 'error')
     } finally {
       setLoading(false)
     }
@@ -128,62 +115,59 @@ export default function MovieSelection() {
   async function loadVideosByMonth(month) {
     try {
       setLoading(true)
-      setError('')
-      const response = await getVideosByMonth(month)
+      const { getVideosByMonth } = await import('../lib/api')
+      let response;
+      
+      if (getVideosByMonth) {
+        response = await getVideosByMonth(month)
+      } else {
+         response = await getLatestVideos()
+      }
+      
       setBatch(response.data.batch)
       setVideos(response.data.videos || [])
-      // 清除之前的選擇
+      
       setSelectedIds([])
       setCurrentPage(1)
       setShowAllPages(false)
     } catch (error) {
-      console.error('載入影片失敗:', error)
-      setError('載入影片清單失敗')
+      console.error('載入特定月份影片失敗:', error)
+      showToast('載入影片清單失敗', 'error')
     } finally {
       setLoading(false)
     }
   }
   
   function handleToggle(videoId) {
-    setSelectedIds((prev) =>
-      prev.includes(videoId)
-        ? prev.filter((id) => id !== videoId)
-        : [...prev, videoId]
-    )
-    setSuccess(false)
-    setError('')
+    if (submitting) return
+    
+    setSelectedIds(prev => {
+      if (prev.includes(videoId)) {
+        return prev.filter(id => id !== videoId)
+      } else {
+        return [...prev, videoId]
+      }
+    })
   }
   
   async function handleSubmit() {
-    if (selectedIds.length === 0) {
-      setError('請至少選擇一部影片')
-      return
-    }
-    
-    if (!batch) {
-      setError('無法提交：批次資訊不存在')
-      return
-    }
+    if (!batch) return
     
     try {
       setSubmitting(true)
-      setError('')
-      await submitSelection({
-        userId: user.id,
-        batchId: batch.id,
-        videoIds: selectedIds,
-        customerName: user.name,
-        customerEmail: user.email,
-      })
-      setSuccess(true)
       
-      // 5 秒後清除成功訊息
-      setTimeout(() => {
-        setSuccess(false)
-      }, 5000)
+      await submitSelection({ 
+        userId: user.id,
+        batchId: batch.id, 
+        videoIds: selectedIds,
+        customerName: user.name || user.email, // Fallback to email if name is missing
+        customerEmail: user.email
+      })
+      
+      showToast('影片選擇已提交成功！', 'success')
     } catch (error) {
-      console.error('提交失敗:', error)
-      setError(error.response?.data?.message || '提交失敗，請稍後再試')
+      console.error('提交選擇失敗:', error)
+      showToast('提交失敗，請稍後再試', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -192,219 +176,127 @@ export default function MovieSelection() {
   function formatMonth(monthStr) {
     if (!monthStr) return ''
     const [year, month] = monthStr.split('-')
-    return `${year}年${parseInt(month)}月`
+    return `${year}年${month}月`
   }
 
-  const totalPages = useMemo(() => {
-    return Math.ceil(videos.length / PAGE_SIZE)
-  }, [videos.length])
-
-  useEffect(() => {
-    if (!showAllPages && totalPages > 0 && currentPage > totalPages) {
-      setCurrentPage(totalPages || 1)
-    }
-  }, [totalPages, showAllPages, currentPage])
-
-  const displayedVideos = useMemo(() => {
-    if (showAllPages) {
-      return videos
-    }
-    const startIndex = (currentPage - 1) * PAGE_SIZE
-    return videos.slice(startIndex, startIndex + PAGE_SIZE)
-  }, [videos, currentPage, showAllPages])
-
-  const pageNumbers = useMemo(() => {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }, [totalPages])
-
-  const rangeStart = videos.length === 0 ? 0 : (showAllPages ? 1 : (currentPage - 1) * PAGE_SIZE + 1)
-  const rangeEnd = showAllPages ? videos.length : Math.min(currentPage * PAGE_SIZE, videos.length)
-
-  function handlePageSelect(pageNumber) {
-    setShowAllPages(false)
-    setCurrentPage(pageNumber)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
-
-  function toggleShowAllPages() {
-    setShowAllPages((prev) => !prev)
-  }
+  // 分頁邏輯
+  const totalPages = Math.ceil(videos.length / PAGE_SIZE)
+  const displayedVideos = showAllPages 
+    ? videos 
+    : videos.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
   
-  if (loadingMonths || loading) {
+  const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1)
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader className="h-12 w-12 text-primary-600 animate-spin" />
+      <div className="min-h-[60vh] flex flex-col items-center justify-center">
+        <div className="w-16 h-16 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mb-4"></div>
+        <p className="text-gray-500 font-medium animate-pulse">載入精彩影片中...</p>
       </div>
     )
   }
-  
+
   return (
-    <div className="space-y-8">
-      {/* 標題與控制列 */}
-      <div className="flex flex-col gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">影片選擇</h1>
-            <p className="text-gray-600 mt-2">
-              {batch ? `${batch.name}` : '請選擇月份查看影片清單'}
-            </p>
-          </div>
+    <div className="space-y-8 pb-24">
+      {/* 頂部控制列 - Glass Panel */}
+      <div className="sticky top-24 z-30 glass-panel rounded-2xl p-4 mb-8 transition-all duration-300">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           
-          {/* 月份選擇器 */}
-          {availableMonths.length > 0 && (
-            <div className="flex items-center gap-3">
-              <Calendar className="h-5 w-5 text-gray-500" />
-              <select
+          {/* 左側：月份選擇 */}
+          <div className="flex items-center gap-3">
+            <div className="w-[200px]">
+              <Select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="select min-w-[150px]"
-              >
-                {availableMonths.map((month) => (
-                  <option key={month} value={month}>
-                    {formatMonth(month)}
-                  </option>
-                ))}
-              </select>
+                options={availableMonths.map(month => ({ value: month, label: formatMonth(month) }))}
+                placeholder="選擇月份"
+              />
             </div>
-          )}
-        </div>
-        
-        {/* 視圖切換按鈕 */}
-        {videos.length > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600 mr-2">顯示模式：</span>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'grid'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="大圖模式"
-            >
-              <Grid className="h-5 w-5" />
-            </button>
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded-lg transition-colors ${
-                viewMode === 'list'
-                  ? 'bg-primary-600 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-              title="清單模式"
-            >
-              <ListIcon className="h-5 w-5" />
-            </button>
-          </div>
-        )}
-      </div>
-      
-      {/* 錯誤訊息 */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 fade-in">
-          <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <p className="text-sm text-red-800">{error}</p>
-        </div>
-      )}
-      
-      {/* 成功訊息 */}
-      {success && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 fade-in">
-          <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm text-green-800 font-medium">提交成功！</p>
-            <p className="text-sm text-green-700 mt-1">
-              您的選擇已經發送給管理員，我們會盡快為您準備影片。
-            </p>
-          </div>
-        </div>
-      )}
-      
-      {/* 影片清單 */}
-      {!batch || videos.length === 0 ? (
-        <div className="card text-center py-12">
-          <Film className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">暫無影片清單</h2>
-          <p className="text-gray-600">
-            {selectedMonth ? `${formatMonth(selectedMonth)}沒有可選擇的影片` : '目前沒有可選擇的影片'}
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* 選擇統計 */}
-          <div className="card bg-primary-50 border-primary-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <ShoppingCart className="h-6 w-6 text-primary-600" />
-                <div>
-                  <p className="text-sm text-gray-600">已選擇</p>
-                  <p className="text-2xl font-bold text-primary-600">
-                    {selectedIds.length} <span className="text-base font-normal text-gray-600">部影片</span>
-                  </p>
-                </div>
-              </div>
-              
-              {selectedIds.length > 0 && (
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="btn-primary flex-shrink-0"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader className="h-5 w-5 animate-spin" />
-                      提交中...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle className="h-5 w-5" />
-                      提交選擇
-                    </>
-                  )}
-                </button>
-              )}
+            
+            <div className="hidden md:block h-8 w-px bg-gray-200 mx-2"></div>
+            
+            <div className="flex items-center text-sm text-gray-500">
+              <Filter className="h-4 w-4 mr-2" />
+              <span>共 {videos.length} 部影片</span>
             </div>
           </div>
 
-          {videos.length > 0 && totalPages > 0 && (
-            <div className="card flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-gray-500 mr-2">頁面：</span>
+          {/* 右側：視圖切換與分頁 */}
+          <div className="flex items-center gap-3 justify-end">
+            {/* 分頁按鈕 (Desktop) */}
+            {totalPages > 1 && (
+              <div className="hidden lg:flex bg-gray-100/80 p-1 rounded-xl items-center mr-2">
                 {pageNumbers.map((page) => (
                   <button
                     key={page}
-                    onClick={() => handlePageSelect(page)}
-                    className={`px-3 py-1 rounded-lg text-sm border ${
+                    onClick={() => {
+                      setCurrentPage(page)
+                      setShowAllPages(false)
+                    }}
+                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${
                       currentPage === page && !showAllPages
-                        ? 'bg-primary-600 text-white border-primary-600'
-                        : 'border-primary-100 text-gray-700 hover:border-primary-300'
+                        ? 'bg-white text-primary-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
                     {page}
                   </button>
                 ))}
-              </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500">
-                <span>
-                  {videos.length === 0
-                    ? '沒有影片'
-                    : `顯示第 ${rangeStart}-${rangeEnd} 部，共 ${videos.length} 部`}
-                </span>
-                {videos.length > PAGE_SIZE && (
-                  <button
-                    onClick={toggleShowAllPages}
-                    className="btn btn-secondary btn-sm"
+                <button
+                    onClick={() => setShowAllPages(!showAllPages)}
+                    className={`px-3 h-8 rounded-lg text-xs font-medium transition-all ml-1 ${
+                      showAllPages
+                        ? 'bg-white text-primary-600 shadow-sm'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    {showAllPages ? '分頁顯示' : '顯示全部'}
-                  </button>
-                )}
+                    全部
+                </button>
               </div>
+            )}
+
+            {/* 視圖切換 */}
+            <div className="bg-gray-100/80 p-1 rounded-xl flex items-center">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-2 rounded-lg transition-all ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-primary-600 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <Grid className="h-5 w-5" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-2 rounded-lg transition-all ${
+                  viewMode === 'list'
+                    ? 'bg-white text-primary-600 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <ListIcon className="h-5 w-5" />
+              </button>
             </div>
-          )}
-          
-          {/* 影片顯示 - 大圖模式 */}
-          {viewMode === 'grid' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          </div>
+        </div>
+      </div>
+      
+      {/* 影片列表內容 */}
+      {!batch || videos.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="bg-gray-100 p-6 rounded-full mb-6">
+            <Film className="h-12 w-12 text-gray-300" />
+          </div>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">暫無影片</h2>
+          <p className="text-gray-500 max-w-md">
+            {selectedMonth ? `${formatMonth(selectedMonth)}目前沒有可供選擇的影片。` : '請稍後再回來查看。'}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {viewMode === 'grid' ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
               {displayedVideos.map((video) => (
                 <MovieCard
                   key={video.id}
@@ -414,115 +306,86 @@ export default function MovieSelection() {
                 />
               ))}
             </div>
-          )}
-          
-          {/* 影片顯示 - 清單模式 */}
-          {viewMode === 'list' && (
-            <div className="space-y-3">
+          ) : (
+            <div className="space-y-4 max-w-4xl mx-auto">
               {displayedVideos.map((video) => (
                 <div
                   key={video.id}
                   onClick={() => handleToggle(video.id)}
-                  className={`card cursor-pointer transition-all hover:shadow-lg ${
+                  className={`group relative bg-white rounded-2xl p-4 flex gap-4 transition-all duration-200 hover:shadow-md cursor-pointer border ${
                     selectedIds.includes(video.id)
-                      ? 'ring-2 ring-primary-600 bg-primary-50'
-                      : ''
+                      ? 'border-primary-500 ring-1 ring-primary-500 bg-primary-50/10'
+                      : 'border-gray-100'
                   }`}
                 >
-                  <div className="flex gap-4">
-                    {/* 縮圖 */}
-                    <div className="flex-shrink-0 w-24 h-36 bg-gray-100 rounded-lg overflow-hidden">
-                      {video.thumbnail_url ? (
-                        <img
-                          src={video.thumbnail_url}
-                          alt={video.title}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Film className="h-8 w-8 text-gray-400" />
+                  <div className="w-24 h-36 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden">
+                    {video.thumbnail_url ? (
+                      <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <Film className="m-auto h-8 w-8 text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 py-1">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="font-bold text-lg text-gray-900">{video.title}</h3>
+                        <p className="text-sm text-gray-500">{video.title_en}</p>
+                      </div>
+                      {selectedIds.includes(video.id) && (
+                        <div className="bg-primary-500 text-white rounded-full p-1">
+                          <CheckCircle className="h-5 w-5" />
                         </div>
                       )}
                     </div>
-                    
-                    {/* 資訊 */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg text-gray-900 mb-1">
-                            {video.title}
-                          </h3>
-                          {video.title_en && (
-                            <p className="text-sm text-gray-500 mb-2">
-                              {video.title_en}
-                            </p>
-                          )}
-                          {video.description && (
-                            <p className="text-sm text-gray-600 line-clamp-2 mb-3">
-                              {video.description}
-                            </p>
-                          )}
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            {video.director && (
-                              <span className="px-2 py-1 bg-gray-100 rounded">
-                                導演: {video.director}
-                              </span>
-                            )}
-                            {video.duration && (
-                              <span className="px-2 py-1 bg-gray-100 rounded">
-                                {video.duration}
-                              </span>
-                            )}
-                            {video.rating && (
-                              <span className="px-2 py-1 bg-gray-100 rounded">
-                                {video.rating}
-                              </span>
-                            )}
-                            {video.language && (
-                              <span className="px-2 py-1 bg-gray-100 rounded">
-                                {video.language}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* 選中標記 */}
-                        {selectedIds.includes(video.id) && (
-                          <div className="flex-shrink-0">
-                            <div className="bg-primary-600 text-white rounded-full p-2">
-                              <CheckCircle className="h-6 w-6" />
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">{video.description}</p>
+                    <div className="mt-auto pt-3 flex gap-3 text-xs text-gray-500">
+                      {video.duration && <span>{video.duration} 分鐘</span>}
+                      {video.rating && <span>{video.rating}</span>}
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </>
+        </div>
       )}
       
-      {/* 浮動提交按鈕（移動端） */}
-      {selectedIds.length > 0 && (
-        <div className="fixed bottom-6 right-6 sm:hidden">
+      {/* Floating Selection Bar - Always visible when items are selected */}
+      <div className={`fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-200/50 py-3 px-4 transition-transform duration-300 z-40 ${
+        selectedIds.length > 0 ? 'translate-y-0' : 'translate-y-full'
+      }`}>
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary-100 text-primary-700 p-2 rounded-lg">
+              <ShoppingCart className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">已選擇</p>
+              <p className="text-2xl font-display font-bold text-gray-900">
+                {selectedIds.length} <span className="text-base font-normal text-gray-500">部影片</span>
+              </p>
+            </div>
+          </div>
+          
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="btn-primary shadow-lg"
+            className="btn btn-primary btn-lg shadow-xl shadow-primary-500/20 min-w-[200px]"
           >
             {submitting ? (
-              <Loader className="h-5 w-5 animate-spin" />
+              <div className="flex items-center gap-2">
+                <Loader className="h-5 w-5 animate-spin" />
+                處理中...
+              </div>
             ) : (
-              <>
-                <ShoppingCart className="h-5 w-5" />
-                提交 ({selectedIds.length})
-              </>
+              <div className="flex items-center gap-2">
+                <span>確認提交</span>
+                <CheckCircle className="h-5 w-5" />
+              </div>
             )}
           </button>
         </div>
-      )}
+      </div>
     </div>
   )
 }

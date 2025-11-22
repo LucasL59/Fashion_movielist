@@ -5,9 +5,12 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Mail, ShieldCheck, Info } from 'lucide-react'
+import { Plus, Trash2, Mail, ShieldCheck, Info, AlertTriangle } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createMailRule, deleteMailRule, getMailRules } from '../lib/api'
+import Select from '../components/Select'
+import Modal from '../components/Modal'
+import { useToast } from '../contexts/ToastContext'
 
 const MAIL_EVENTS = [
   {
@@ -34,6 +37,7 @@ const initialUserSelectState = MAIL_EVENTS.reduce((acc, event) => {
 
 export default function MailManagement() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [rules, setRules] = useState([])
   const [availableUsers, setAvailableUsers] = useState([])
   const [defaultRecipients, setDefaultRecipients] = useState({
@@ -41,7 +45,6 @@ export default function MailManagement() {
     batch_uploaded: [],
   })
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [formState, setFormState] = useState(initialFormState)
   const [userSelectState, setUserSelectState] = useState(initialUserSelectState)
   const [submitting, setSubmitting] = useState(false)
@@ -54,14 +57,13 @@ export default function MailManagement() {
   async function loadMailRules() {
     try {
       setLoading(true)
-      setError('')
       const response = await getMailRules()
       setRules(response.data?.rules || [])
       setAvailableUsers(response.data?.availableUsers || [])
       setDefaultRecipients(response.data?.defaults || {})
     } catch (err) {
       console.error('載入郵件規則失敗:', err)
-      setError('無法取得郵件設定，請稍後再試。')
+      showToast('無法取得郵件設定，請稍後再試。', 'error')
     } finally {
       setLoading(false)
     }
@@ -70,7 +72,28 @@ export default function MailManagement() {
   async function handleAddRecipientFromUser(eventType) {
     const profileId = userSelectState[eventType]
     if (!profileId) {
-      setError('請先選擇要新增的使用者')
+      showToast('請先選擇要新增的使用者', 'warning')
+      return
+    }
+
+    // 檢查是否已存在於預設名單中 (簡單檢查 ID 或 Email)
+    const selectedUser = availableUsers.find(u => u.id === profileId)
+    const isDefault = defaultRecipients[eventType]?.some(
+      r => r.email === selectedUser?.email || r.id === profileId
+    )
+    
+    if (isDefault) {
+      showToast('此使用者已包含在預設通知對象中，無需重複新增', 'info')
+      return
+    }
+
+    // 檢查是否已存在於額外規則中
+    const isExist = rules.some(
+      r => r.event_type === eventType && r.recipient_email === selectedUser?.email
+    )
+    
+    if (isExist) {
+      showToast('此使用者已在額外收件人名單中', 'warning')
       return
     }
 
@@ -86,9 +109,10 @@ export default function MailManagement() {
         [eventType]: '',
       }))
       await loadMailRules()
+      showToast('已成功加入使用者', 'success')
     } catch (err) {
       console.error('新增使用者收件人失敗:', err)
-      setError(err.response?.data?.message || '新增失敗，請稍後再試。')
+      showToast(err.response?.data?.message || '新增失敗，請稍後再試。', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -97,7 +121,27 @@ export default function MailManagement() {
   async function handleAddRecipient(eventType) {
     const payload = formState[eventType]
     if (!payload.email) {
-      setError('請輸入 Email')
+      showToast('請輸入 Email', 'warning')
+      return
+    }
+
+    // 檢查是否已存在於預設名單
+    const isDefault = defaultRecipients[eventType]?.some(
+      r => r.email === payload.email
+    )
+    
+    if (isDefault) {
+      showToast('此 Email 已包含在預設通知對象中，無需重複新增', 'info')
+      return
+    }
+
+    // 檢查是否已存在於額外規則
+    const isExist = rules.some(
+      r => r.event_type === eventType && r.recipient_email === payload.email
+    )
+    
+    if (isExist) {
+      showToast('此 Email 已在額外收件人名單中', 'warning')
       return
     }
 
@@ -114,9 +158,10 @@ export default function MailManagement() {
         [eventType]: { name: '', email: '' },
       }))
       await loadMailRules()
+      showToast('已新增收件人', 'success')
     } catch (err) {
       console.error('新增收件人失敗:', err)
-      setError(err.response?.data?.message || '新增收件人失敗，請確認 Email 格式。')
+      showToast(err.response?.data?.message || '新增收件人失敗，請確認 Email 格式。', 'error')
     } finally {
       setSubmitting(false)
     }
@@ -127,9 +172,10 @@ export default function MailManagement() {
     try {
       await deleteMailRule(ruleId)
       await loadMailRules()
+      showToast('已移除收件人', 'success')
     } catch (err) {
       console.error('刪除收件人失敗:', err)
-      setError('刪除失敗，請稍後再試。')
+      showToast('刪除失敗，請稍後再試。', 'error')
     }
   }
 
@@ -158,12 +204,6 @@ export default function MailManagement() {
           設定不同事件的通知對象，確保所有關係人都能即時收到訊息。
         </p>
       </div>
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-700">
-          {error}
-        </div>
-      )}
 
       {loading ? (
         <div className="flex items-center gap-2 text-gray-500">
@@ -248,26 +288,28 @@ export default function MailManagement() {
               <div>
                 <p className="text-sm font-medium text-gray-700 mb-3">從系統使用者加入</p>
                 <div className="flex flex-col md:flex-row gap-3">
-                  <select
-                    className="select flex-1"
-                    value={userSelectState[event.value]}
-                    onChange={(e) =>
-                      setUserSelectState((prev) => ({
-                        ...prev,
-                        [event.value]: e.target.value,
-                      }))
-                    }
-                  >
-                    <option value="">選擇使用者</option>
-                    {availableUsers.map((staff) => (
-                      <option key={staff.id} value={staff.id}>
-                        {staff.name}（{staff.email}）
-                      </option>
-                    ))}
-                  </select>
+                  <div className="flex-1">
+                    <Select
+                      value={userSelectState[event.value]}
+                      onChange={(e) =>
+                        setUserSelectState((prev) => ({
+                          ...prev,
+                          [event.value]: e.target.value,
+                        }))
+                      }
+                      options={[
+                        { value: '', label: '選擇使用者' },
+                        ...availableUsers.map((staff) => ({
+                          value: staff.id,
+                          label: `${staff.name}（${staff.email}）`
+                        }))
+                      ]}
+                      placeholder="選擇使用者"
+                    />
+                  </div>
                   <button
                     type="button"
-                    className="btn-secondary flex items-center justify-center gap-2"
+                    className="btn btn-secondary flex items-center justify-center gap-2 whitespace-nowrap"
                     onClick={() => handleAddRecipientFromUser(event.value)}
                     disabled={submitting}
                   >
@@ -306,7 +348,7 @@ export default function MailManagement() {
                   />
                   <button
                     type="button"
-                    className="btn-primary flex items-center justify-center gap-2"
+                    className="btn btn-primary flex items-center justify-center gap-2 whitespace-nowrap"
                     onClick={() => handleAddRecipient(event.value)}
                     disabled={submitting}
                   >
@@ -321,34 +363,37 @@ export default function MailManagement() {
       )}
     </div>
 
-      {pendingDelete && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">確認移除收件人</h3>
-              <p className="text-sm text-gray-600 mt-2">
-                確定要移除「{pendingDelete.recipient_name || pendingDelete.recipient_email}」嗎？
-              </p>
-            </div>
-            <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => setPendingDelete(null)}
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                className="btn-primary bg-red-600 hover:bg-red-700 border-none"
-                onClick={handleConfirmDelete}
-              >
-                確認刪除
-              </button>
-            </div>
-          </div>
+      <Modal
+        isOpen={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title="確認移除收件人"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setPendingDelete(null)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary bg-red-600 hover:bg-red-700 border-none"
+              onClick={handleConfirmDelete}
+            >
+              確認刪除
+            </button>
+          </>
+        }
+      >
+        <div className="flex items-start gap-3 text-gray-600">
+          <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <p>
+            確定要移除「{pendingDelete?.recipient_name || pendingDelete?.recipient_email}」嗎？
+            此操作將使該收件人無法收到相關通知。
+          </p>
         </div>
-      )}
+      </Modal>
     </>
   )
 }

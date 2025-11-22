@@ -19,7 +19,15 @@ export function AuthProvider({ children }) {
   
   useEffect(() => {
     // 檢查當前 session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        // 處理 Refresh Token 無效的情況
+        console.warn('Session init error:', error.message)
+        supabase.auth.signOut()
+        setLoading(false)
+        return
+      }
+      
       if (session?.user) {
         fetchUserProfile(session.user.id)
       } else {
@@ -28,7 +36,14 @@ export function AuthProvider({ children }) {
     })
     
     // 監聽認證狀態變化
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // 處理 Token 刷新失敗
+      if (event === 'TOKEN_REFRESH_SHUTDOWN' || event === 'SIGNED_OUT') {
+        setUser(null)
+        setLoading(false)
+        return
+      }
+
       if (session?.user) {
         fetchUserProfile(session.user.id)
       } else {

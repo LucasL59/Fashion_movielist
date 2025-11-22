@@ -8,6 +8,7 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { Users, Shield, Upload as UploadIcon, User, CheckCircle, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import Select from '../components/Select'
 
 export default function UserManagement() {
   const { user } = useAuth()
@@ -214,16 +215,19 @@ export default function UserManagement() {
                       {u.id === user.id ? (
                         <span className="text-sm text-gray-500">無法變更自己的角色</span>
                       ) : (
-                        <select
-                          value={u.role}
-                          onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                          disabled={updating === u.id}
-                          className="select py-2 text-sm"
-                        >
-                          <option value="customer">客戶</option>
-                          <option value="uploader">上傳者</option>
-                          <option value="admin">管理員</option>
-                        </select>
+                        <div className="min-w-[120px]">
+                          <Select
+                            value={u.role}
+                            onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                            disabled={updating === u.id}
+                            options={[
+                              { value: 'customer', label: '客戶' },
+                              { value: 'uploader', label: '上傳者' },
+                              { value: 'admin', label: '管理員' },
+                            ]}
+                            className="text-sm"
+                          />
+                        </div>
                       )}
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-500">

@@ -253,14 +253,22 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       return;
     }
     
-    // 建立影片清單 HTML
+    // 建立影片清單 HTML - 質感優化版 (無圖片)
     const videoListHtml = videos.map((video, index) => `
-      <tr style="border-bottom: 1px solid #f0e2d6;">
-        <td style="padding: 12px; color: #b27053;">${index + 1}</td>
-        <td style="padding: 12px; font-weight: 600;">${video.title}</td>
-        <td style="padding: 12px; color: #6b5e57;">${video.title_en || '-'}</td>
-        <td style="padding: 12px;">${video.duration ? `${video.duration} 分鐘` : '-'}</td>
-        <td style="padding: 12px;">${video.rating || '-'}</td>
+      <tr style="border-bottom: 1px solid #eee;">
+        <td style="padding: 16px 12px; color: #999; font-size: 14px;">${String(index + 1).padStart(2, '0')}</td>
+        <td style="padding: 16px 12px;">
+          <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">${video.title}</div>
+          <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
+        </td>
+        <td style="padding: 16px 12px; color: #666; font-size: 14px; white-space: nowrap;">
+          ${video.duration ? `${video.duration} 分鐘` : '-'}
+        </td>
+        <td style="padding: 16px 12px; white-space: nowrap;">
+          <span style="background: #f5f5f5; color: #666; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
+            ${video.rating || '普遍級'}
+          </span>
+        </td>
       </tr>
     `).join('');
     
@@ -270,55 +278,77 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       <head>
         <meta charset="UTF-8">
         <style>
-          body { font-family: 'Noto Sans TC', sans-serif; background: #f7f2ed; color: #3f3a36; line-height: 1.7; margin: 0; padding: 0; }
-          .wrapper { max-width: 780px; margin: 0 auto; padding: 30px; }
-          .card { background: #fff; border-radius: 18px; border: 1px solid #f0dfd5; box-shadow: 0 25px 55px rgba(84, 54, 43, 0.18); overflow: hidden; }
-          .header { background: linear-gradient(135deg, #d8a47f, #f6d4b1); padding: 28px; text-align: center; color: #3f2c23; }
-          .header h1 { margin: 0; letter-spacing: 2px; font-size: 24px; }
-          .content { padding: 32px; }
-          .info-box { background: #fdf7f2; border: 1px solid #f0dfd5; border-radius: 16px; padding: 20px; margin-bottom: 24px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 20px; background: #fff; }
-          th { background: #f8efe8; padding: 14px; text-align: left; font-weight: 600; color: #714f3d; }
-          td { padding: 12px; }
-          .footer { text-align: center; padding: 20px; font-size: 12px; color: #988579; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8f9fa; margin: 0; padding: 40px 0; color: #333; }
+          .container { max-width: 680px; margin: 0 auto; background: #fff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+          .header { background: #1a1a1a; padding: 32px; text-align: center; }
+          .header h1 { margin: 0; color: #fff; font-size: 20px; font-weight: 600; letter-spacing: 1px; }
+          .content { padding: 40px; }
+          .summary-card { background: #f8f9fa; border-radius: 12px; padding: 24px; margin-bottom: 32px; border: 1px solid #eef0f2; }
+          .summary-item { display: flex; justify-content: space-between; margin-bottom: 12px; font-size: 14px; }
+          .summary-item:last-child { margin-bottom: 0; }
+          .label { color: #888; }
+          .value { font-weight: 600; color: #333; }
+          .section-title { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0; }
+          table { width: 100%; border-collapse: collapse; }
+          th { text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0; }
+          .footer { background: #f8f9fa; padding: 24px; text-align: center; font-size: 12px; color: #999; border-top: 1px solid #eee; }
         </style>
       </head>
       <body>
-        <div class="wrapper">
-          <div class="card">
-            <div class="header">
-              <h1>客戶已完成影片選擇</h1>
-            </div>
-            <div class="content">
-              <div class="info-box">
-                <p><strong>客戶名稱：</strong>${customerName}</p>
-                <p><strong>客戶 Email：</strong>${customerEmail}</p>
-                <p><strong>批次名稱：</strong>${batch?.name || '未知批次'}</p>
-                <p><strong>選擇數量：</strong>${videos.length} 部</p>
-                <p><strong>提交時間：</strong>${new Date().toLocaleString('zh-TW')}</p>
+        <div class="container">
+          <div class="header">
+            <h1>影片選擇確認通知</h1>
+          </div>
+          <div class="content">
+            <p style="margin-bottom: 24px; font-size: 15px; line-height: 1.6;">
+              親愛的管理員，客戶 <strong>${customerName}</strong> 已經完成了本期的影片挑選，詳細清單如下：
+            </p>
+            
+            <div class="summary-card">
+              <div class="summary-item">
+                <span class="label">客戶名稱</span>
+                <span class="value">${customerName}</span>
               </div>
-              
-              <h3 style="margin-bottom: 12px;">選擇的影片清單</h3>
-              <table>
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>片名</th>
-                    <th>英文片名</th>
-                    <th>片長</th>
-                    <th>級別</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${videoListHtml}
-                </tbody>
-              </table>
-              
-              <p style="margin-top: 28px;">請依照上述清單安排影片調度，如需聯繫客戶，可直接回覆其 Email。</p>
+              <div class="summary-item">
+                <span class="label">客戶 Email</span>
+                <span class="value">${customerEmail}</span>
+              </div>
+              <div class="summary-item">
+                <span class="label">批次名稱</span>
+                <span class="value">${batch?.name || '未知批次'}</span>
+              </div>
+              <div class="summary-item">
+                <span class="label">選擇數量</span>
+                <span class="value" style="color: #d93025;">${videos.length} 部影片</span>
+              </div>
+              <div class="summary-item">
+                <span class="label">提交時間</span>
+                <span class="value">${new Date().toLocaleString('zh-TW')}</span>
+              </div>
             </div>
-            <div class="footer">
-              <p>MVI 影片選擇系統自動通知・Flying Info Tech</p>
-            </div>
+            
+            <div class="section-title">已選影片清單</div>
+            
+            <table>
+              <thead>
+                <tr>
+                  <th width="40">#</th>
+                  <th>影片資訊</th>
+                  <th width="80">片長</th>
+                  <th width="80">分級</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${videoListHtml}
+              </tbody>
+            </table>
+            
+            <p style="margin-top: 32px; font-size: 14px; color: #666; line-height: 1.6;">
+              ※ 本郵件為系統自動發送，請依照此清單協助客戶進行後續影片安排。如需與客戶聯繫，請直接回覆此郵件。
+            </p>
+          </div>
+          <div class="footer">
+            <p>&copy; ${new Date().getFullYear()} MVI 影片選擇系統 | Fashion Info Tech Co., Ltd.</p>
           </div>
         </div>
       </body>
@@ -329,7 +359,7 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       recipients.map((email) =>
         sendEmail({
           to: email,
-          subject: `客戶影片選擇通知 - ${customerName}`,
+          subject: `[影片選擇通知] ${customerName} - ${batch?.name || '新選擇'}`,
           body: emailBody,
         })
       )

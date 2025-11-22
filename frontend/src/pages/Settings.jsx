@@ -8,6 +8,7 @@ import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { User, Mail, Bell, CheckCircle, AlertCircle } from 'lucide-react'
 import { setReminderSchedule, sendReminderNow } from '../lib/api'
+import Select from '../components/Select'
 
 export default function Settings() {
   const { user, updateProfile } = useAuth()
@@ -201,36 +202,30 @@ export default function Settings() {
                 <label htmlFor="reminder-day" className="block text-sm font-medium text-gray-700 mb-2">
                   每月幾號
                 </label>
-                <select
-                  id="reminder-day"
+                <Select
                   value={reminderDay}
                   onChange={(e) => setReminderDay(e.target.value)}
-                  className="select"
-                >
-                  {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
-                    <option key={day} value={day}>
-                      {day} 號
-                    </option>
-                  ))}
-                </select>
+                  options={Array.from({ length: 28 }, (_, i) => i + 1).map((day) => ({
+                    value: day.toString(),
+                    label: `${day} 號`
+                  }))}
+                  placeholder="選擇日期"
+                />
               </div>
               
               <div>
                 <label htmlFor="reminder-hour" className="block text-sm font-medium text-gray-700 mb-2">
                   幾點
                 </label>
-                <select
-                  id="reminder-hour"
+                <Select
                   value={reminderHour}
                   onChange={(e) => setReminderHour(e.target.value)}
-                  className="select"
-                >
-                  {Array.from({ length: 24 }, (_, i) => i).map((hour) => (
-                    <option key={hour} value={hour}>
-                      {hour}:00
-                    </option>
-                  ))}
-                </select>
+                  options={Array.from({ length: 24 }, (_, i) => i).map((hour) => ({
+                    value: hour.toString(),
+                    label: `${hour}:00`
+                  }))}
+                  placeholder="選擇時間"
+                />
               </div>
             </div>
             

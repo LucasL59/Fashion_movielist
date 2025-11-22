@@ -10,6 +10,7 @@ import { Film, Calendar, Loader, AlertCircle, Edit } from 'lucide-react'
 import MovieCard from '../components/MovieCard'
 import VideoEditModal from '../components/VideoEditModal'
 import { getLatestVideos, getVideosByMonth, getAvailableMonths } from '../lib/api'
+import Select from '../components/Select'
 
 export default function VideoManagement() {
   const { user } = useAuth()
@@ -136,17 +137,17 @@ export default function VideoManagement() {
         {availableMonths.length > 0 && (
           <div className="flex items-center gap-3">
             <Calendar className="h-5 w-5 text-gray-500" />
-            <select
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="select min-w-[150px]"
-            >
-              {availableMonths.map((month) => (
-                <option key={month} value={month}>
-                  {formatMonth(month)}
-                </option>
-              ))}
-            </select>
+            <div className="min-w-[150px]">
+              <Select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                options={availableMonths.map((month) => ({
+                  value: month,
+                  label: formatMonth(month)
+                }))}
+                placeholder="選擇月份"
+              />
+            </div>
           </div>
         )}
       </div>

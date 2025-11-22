@@ -14,22 +14,25 @@ import {
   AlertCircle,
   Loader,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { uploadExcel, getBatches, getBatchSelections } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { useToast } from '../contexts/ToastContext'
+import Modal from '../components/Modal'
 
 export default function UploadManagement() {
   const { user } = useAuth()
+  const { showToast } = useToast()
   const [file, setFile] = useState(null)
   const [batchName, setBatchName] = useState('')
   const [uploading, setUploading] = useState(false)
-  const [uploadSuccess, setUploadSuccess] = useState(false)
-  const [uploadError, setUploadError] = useState('')
   const [batches, setBatches] = useState([])
   const [selectedBatch, setSelectedBatch] = useState(null)
   const [selections, setSelections] = useState([])
   const [loading, setLoading] = useState(true)
   const [deleting, setDeleting] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
 
   useEffect(() => {
     loadBatches()
@@ -42,6 +45,7 @@ export default function UploadManagement() {
       setBatches(response.data || [])
     } catch (error) {
       console.error('載入批次失敗:', error)
+      showToast('載入批次失敗', 'error')
     } finally {
       setLoading(false)
     }
@@ -53,6 +57,7 @@ export default function UploadManagement() {
       setSelections(response.data || [])
     } catch (error) {
       console.error('載入選擇失敗:', error)
+      showToast('載入選擇失敗', 'error')
     }
   }
 
@@ -60,8 +65,6 @@ export default function UploadManagement() {
     const selectedFile = e.target.files[0]
     if (selectedFile) {
       setFile(selectedFile)
-      setUploadSuccess(false)
-      setUploadError('')
 
       if (!batchName) {
         const now = new Date()
@@ -73,20 +76,19 @@ export default function UploadManagement() {
 
   async function handleUpload() {
     if (!file) {
-      setUploadError('請選擇檔案')
+      showToast('請選擇檔案', 'warning')
       return
     }
 
     if (!batchName) {
-      setUploadError('請輸入批次名稱')
+      showToast('請輸入批次名稱', 'warning')
       return
     }
 
     try {
       setUploading(true)
-      setUploadError('')
       await uploadExcel(file, user.id, batchName)
-      setUploadSuccess(true)
+      showToast('上傳成功！系統已發送通知', 'success')
       setFile(null)
       setBatchName('')
 
@@ -94,7 +96,7 @@ export default function UploadManagement() {
       document.getElementById('file-input').value = ''
     } catch (error) {
       console.error('上傳失敗:', error)
-      setUploadError(error.response?.data?.message || '上傳失敗，請稍後再試')
+      showToast(error.response?.data?.message || '上傳失敗，請稍後再試', 'error')
     } finally {
       setUploading(false)
     }
@@ -105,33 +107,36 @@ export default function UploadManagement() {
     loadSelections(batch.id)
   }
 
-  async function handleDeleteBatch(batchId, name) {
-    if (!window.confirm(`確定要刪除批次「${name}」嗎？\n\n此操作無法復原。`)) {
-      return
-    }
+  function handleDeleteBatch(batchId, name) {
+    setPendingDelete({ id: batchId, name })
+  }
 
+  async function handleConfirmDelete() {
+    if (!pendingDelete) return
+
+    const { id, name } = pendingDelete
     try {
-      setDeleting(batchId)
+      setDeleting(id)
       const { error } = await supabase
         .from('batches')
         .delete()
-        .eq('id', batchId)
+        .eq('id', id)
 
       if (error) throw error
 
-      setBatches(batches.filter((batch) => batch.id !== batchId))
-      if (selectedBatch?.id === batchId) {
+      setBatches(batches.filter((batch) => batch.id !== id))
+      if (selectedBatch?.id === id) {
         setSelectedBatch(null)
         setSelections([])
       }
 
-      setUploadSuccess(true)
-      setTimeout(() => setUploadSuccess(false), 3000)
+      showToast(`批次「${name}」已刪除`, 'success')
     } catch (error) {
       console.error('刪除批次失敗:', error)
-      setUploadError('刪除批次失敗：' + error.message)
+      showToast('刪除批次失敗：' + error.message, 'error')
     } finally {
       setDeleting(null)
+      setPendingDelete(null)
     }
   }
 
@@ -148,25 +153,6 @@ export default function UploadManagement() {
           <Upload className="h-6 w-6 text-primary-600" />
           <h2 className="text-xl font-bold text-gray-900">上傳影片清單</h2>
         </div>
-
-        {uploadSuccess && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 mb-6">
-            <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm font-medium text-green-800">上傳成功！</p>
-              <p className="text-sm text-green-700 mt-1">
-                影片清單已上傳，系統已自動發送通知給所有客戶。
-              </p>
-            </div>
-          </div>
-        )}
-
-        {uploadError && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 mb-6">
-            <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-red-800">{uploadError}</p>
-          </div>
-        )}
 
         <div className="space-y-4">
           <div>
@@ -190,7 +176,7 @@ export default function UploadManagement() {
             <div className="flex items-center gap-4">
               <label
                 htmlFor="file-input"
-                className="btn btn-outline cursor-pointer inline-flex items-center gap-2"
+                className="btn btn-outline cursor-pointer"
               >
                 <FileSpreadsheet className="h-5 w-5" />
                 選擇檔案
@@ -310,6 +296,43 @@ export default function UploadManagement() {
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title="確認刪除批次"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => setPendingDelete(null)}
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary bg-red-600 hover:bg-red-700 border-none"
+              onClick={handleConfirmDelete}
+              disabled={!!deleting}
+            >
+              {deleting ? '刪除中...' : '確認刪除'}
+            </button>
+          </>
+        }
+      >
+        <div className="flex items-start gap-3 text-gray-600">
+          <AlertTriangle className="h-5 w-5 text-amber-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium text-gray-900">
+              確定要刪除批次「{pendingDelete?.name}」嗎？
+            </p>
+            <p className="mt-1 text-sm">
+              此操作將會刪除該批次內的所有影片及客戶的選擇紀錄，且無法復原。
+            </p>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
