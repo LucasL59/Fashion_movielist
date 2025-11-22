@@ -34,10 +34,47 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 
 // CORS 設定
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-  credentials: true
-}));
+const defaultOrigin = process.env.FRONTEND_URL || 'http://localhost:5173'
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || defaultOrigin)
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+const allowedOriginPatterns = (process.env.ALLOWED_ORIGIN_PATTERNS || '')
+  .split(',')
+  .map((pattern) => pattern.trim())
+  .filter(Boolean)
+  .map((pattern) => {
+    try {
+      return new RegExp(pattern)
+    } catch (error) {
+      console.warn(`⚠️ 無法解析 CORS 通配規則：${pattern}`, error.message)
+      return null
+    }
+  })
+  .filter(Boolean)
+
+// 預設允許目前 Vercel 專案產生的動態網域
+allowedOriginPatterns.push(/^https:\/\/fashion-movielist-[a-z0-9-]+\.vercel\.app$/i)
+
+function isOriginAllowed(origin) {
+  if (!origin) return true // Server-to-server or same-origin
+  if (allowedOrigins.includes(origin)) return true
+  return allowedOriginPatterns.some((regex) => regex.test(origin))
+}
+
+app.use(
+  cors({
+    origin(origin, callback) {
+      if (isOriginAllowed(origin)) {
+        return callback(null, true)
+      }
+      console.warn(`🚫 CORS 阻擋來源: ${origin}`)
+      return callback(new Error('CORS: 此來源未被允許'))
+    },
+    credentials: true,
+  })
+)
 
 // 日誌中間件
 app.use(morgan('combined'));
