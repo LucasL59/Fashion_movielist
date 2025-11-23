@@ -57,6 +57,20 @@ export default function CustomerDashboard() {
   const hasNewBatch = status?.hasNewBatch
   const selection = status?.selection
 
+  function getStatusStyles(condition) {
+    return condition
+      ? {
+          container: 'bg-green-50 border-green-200',
+          icon: 'bg-green-100 text-green-600',
+          badge: 'text-green-700 bg-green-100',
+        }
+      : {
+          container: 'bg-red-50 border-red-200',
+          icon: 'bg-red-100 text-red-600',
+          badge: 'text-red-700 bg-red-100',
+        }
+  }
+
   return (
     <div className="space-y-8">
       {/* 歡迎與狀態 */}
@@ -87,10 +101,10 @@ export default function CustomerDashboard() {
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <div className="rounded-2xl border border-primary-100 bg-white p-4">
+          <div className={`rounded-2xl border p-4 ${getStatusStyles(!!latestBatch).container}`}>
             <p className="text-sm text-gray-500">本月清單狀態</p>
             <div className="mt-3 flex items-center gap-3">
-              <div className="p-3 rounded-full bg-primary-50 text-primary-600">
+              <div className={`p-3 rounded-full ${getStatusStyles(!!latestBatch).icon}`}>
                 <Clock className="h-5 w-5" />
               </div>
               <div>
@@ -100,14 +114,17 @@ export default function CustomerDashboard() {
                 <p className="text-sm text-gray-500">
                   {latestBatch ? `更新於 ${formatDateTime(latestBatch.created_at)}` : '等待管理員上傳'}
                 </p>
+                <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyles(!!latestBatch).badge}`}>
+                  {latestBatch ? '資料就緒' : '尚無清單'}
+                </span>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-primary-100 bg-white p-4">
+          <div className={`rounded-2xl border p-4 ${getStatusStyles(hasSelection && !!latestBatch).container}`}>
             <p className="text-sm text-gray-500">我的選擇狀態</p>
             <div className="mt-3 flex items-center gap-3">
-              <div className={`p-3 rounded-full ${hasSelection ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'}`}>
+              <div className={`p-3 rounded-full ${getStatusStyles(hasSelection && !!latestBatch).icon}`}>
                 {hasSelection ? <CheckCircle2 className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
               </div>
               <div>
@@ -121,6 +138,9 @@ export default function CustomerDashboard() {
                       ? '完成選擇後才會寄出通知'
                       : '請等待新的清單'}
                 </p>
+                <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyles(hasSelection && !!latestBatch).badge}`}>
+                  {hasSelection ? '已完成' : latestBatch ? '待處理' : '未開放'}
+                </span>
               </div>
             </div>
           </div>

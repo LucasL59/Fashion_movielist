@@ -9,6 +9,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { Film, Calendar, Loader, AlertCircle, Edit } from 'lucide-react'
 import MovieCard from '../components/MovieCard'
 import VideoEditModal from '../components/VideoEditModal'
+import BrandTransition from '../components/BrandTransition'
 import { getLatestVideos, getVideosByMonth, getAvailableMonths } from '../lib/api'
 import Select from '../components/Select'
 
@@ -18,6 +19,11 @@ export default function VideoManagement() {
   const [videos, setVideos] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  
+  // 分頁設定
+  const PAGE_SIZE = 12
+  const [currentPage, setCurrentPage] = useState(1)
+  const [showAllPages, setShowAllPages] = useState(false)
   
   // 月份選擇相關
   const [availableMonths, setAvailableMonths] = useState([])
@@ -71,6 +77,8 @@ export default function VideoManagement() {
       const response = await getLatestVideos()
       setBatch(response.data.batch)
       setVideos(response.data.videos || [])
+      setCurrentPage(1)
+      setShowAllPages(false)
     } catch (error) {
       console.error('載入影片失敗:', error)
       setError('載入影片清單失敗')
@@ -86,6 +94,8 @@ export default function VideoManagement() {
       const response = await getVideosByMonth(month)
       setBatch(response.data.batch)
       setVideos(response.data.videos || [])
+      setCurrentPage(1)
+      setShowAllPages(false)
     } catch (error) {
       console.error('載入影片失敗:', error)
       setError('載入影片清單失敗')
@@ -113,17 +123,18 @@ export default function VideoManagement() {
     const [year, month] = monthStr.split('-')
     return `${year}年${parseInt(month)}月`
   }
+
+  // 分頁邏輯
+  const totalPages = Math.ceil(videos.length / PAGE_SIZE)
+  const displayedVideos = showAllPages 
+    ? videos 
+    : videos.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
   
-  if (loadingMonths || loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <Loader className="h-12 w-12 text-primary-600 animate-spin" />
-      </div>
-    )
-  }
+  const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1)
   
   return (
     <div className="space-y-8">
+      <BrandTransition isVisible={loadingMonths || loading} />
       {/* 標題與月份選擇器 */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -133,23 +144,57 @@ export default function VideoManagement() {
           </p>
         </div>
         
-        {/* 月份選擇器 */}
-        {availableMonths.length > 0 && (
-          <div className="flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-gray-500" />
-            <div className="min-w-[150px]">
-              <Select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                options={availableMonths.map((month) => ({
-                  value: month,
-                  label: formatMonth(month)
-                }))}
-                placeholder="選擇月份"
-              />
+        {/* 月份選擇器與分頁 */}
+        <div className="flex flex-col md:flex-row items-center gap-4">
+          {availableMonths.length > 0 && (
+            <div className="flex items-center gap-3">
+              <Calendar className="h-5 w-5 text-gray-500" />
+              <div className="min-w-[150px]">
+                <Select
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  options={availableMonths.map((month) => ({
+                    value: month,
+                    label: formatMonth(month)
+                  }))}
+                  placeholder="選擇月份"
+                />
+              </div>
             </div>
-          </div>
-        )}
+          )}
+
+          {/* 分頁按鈕 */}
+          {totalPages > 1 && (
+            <div className="flex bg-gray-100/80 p-1 rounded-xl items-center overflow-x-auto max-w-[250px] sm:max-w-none scrollbar-hide">
+              {pageNumbers.map((page) => (
+                <button
+                  key={page}
+                  onClick={() => {
+                    setCurrentPage(page)
+                    setShowAllPages(false)
+                  }}
+                  className={`min-w-[2rem] h-8 rounded-lg text-sm font-medium transition-all flex-shrink-0 ${
+                    currentPage === page && !showAllPages
+                      ? 'bg-white text-primary-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  {page}
+                </button>
+              ))}
+              <button
+                  onClick={() => setShowAllPages(!showAllPages)}
+                  className={`px-3 h-8 rounded-lg text-xs font-medium transition-all ml-1 whitespace-nowrap ${
+                    showAllPages
+                      ? 'bg-white text-primary-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  全部
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       
       {/* 錯誤訊息 */}
@@ -161,7 +206,7 @@ export default function VideoManagement() {
       )}
       
       {/* 影片清單 */}
-      {!batch || videos.length === 0 ? (
+      {!loading && (!batch || videos.length === 0) ? (
         <div className="card text-center py-12">
           <Film className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">暫無影片清單</h2>
@@ -186,7 +231,7 @@ export default function VideoManagement() {
           
           {/* 影片網格 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {videos.map((video) => (
+            {displayedVideos.map((video) => (
               <MovieCard
                 key={video.id}
                 video={video}

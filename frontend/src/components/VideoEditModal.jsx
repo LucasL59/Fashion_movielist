@@ -5,6 +5,7 @@
  */
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Upload, Loader, CheckCircle, AlertCircle, Image as ImageIcon } from 'lucide-react'
 import { updateVideo } from '../lib/api'
 
@@ -105,11 +106,26 @@ export default function VideoEditModal({ video, onClose, onSuccess }) {
   
   if (!video) return null
   
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-        {/* 標題 */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+  return createPortal(
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background-color: rgba(156, 163, 175, 0.5);
+          border-radius: 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background-color: rgba(156, 163, 175, 0.8);
+        }
+      `}</style>
+      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
+        {/* 標題 - 固定在頂部 */}
+        <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between flex-shrink-0 z-10">
           <h2 className="text-xl font-bold text-gray-900">編輯影片資訊</h2>
           <button
             onClick={onClose}
@@ -119,232 +135,235 @@ export default function VideoEditModal({ video, onClose, onSuccess }) {
           </button>
         </div>
         
-        {/* 表單 */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* 錯誤訊息 */}
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{error}</p>
+        {/* 表單 - 可滾動區域 */}
+        <div className="overflow-y-auto p-6 custom-scrollbar">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* 錯誤訊息 */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-red-800">{error}</p>
+              </div>
+            )}
+            
+            {/* 圖片上傳 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                影片封面
+              </label>
+              <div className="flex items-start gap-4">
+                {/* 預覽 */}
+                <div className="flex-shrink-0">
+                  {thumbnailPreview ? (
+                    <img
+                      src={thumbnailPreview}
+                      alt="預覽"
+                      className="w-32 h-48 object-cover rounded-lg border border-gray-200"
+                      style={{ borderRadius: '0.5rem' }}
+                    />
+                  ) : (
+                    <div className="w-32 h-48 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center">
+                      <ImageIcon className="h-12 w-12 text-gray-400" />
+                    </div>
+                  )}
+                </div>
+                
+                {/* 上傳按鈕 */}
+                <div className="flex-1">
+                  <label className="btn-secondary cursor-pointer inline-flex items-center gap-2">
+                    <Upload className="h-5 w-5" />
+                    選擇新圖片
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                  </label>
+                  <p className="text-sm text-gray-500 mt-2">
+                    支援 JPEG、PNG、GIF、WebP 格式，最大 5MB
+                  </p>
+                </div>
+              </div>
             </div>
-          )}
-          
-          {/* 圖片上傳 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              影片封面
-            </label>
-            <div className="flex items-start gap-4">
-              {/* 預覽 */}
-              <div className="flex-shrink-0">
-                {thumbnailPreview ? (
-                  <img
-                    src={thumbnailPreview}
-                    alt="預覽"
-                    className="w-32 h-48 object-cover rounded-lg border border-gray-200"
-                  />
-                ) : (
-                  <div className="w-32 h-48 bg-gray-100 rounded-lg border border-gray-200 flex items-center justify-center">
-                    <ImageIcon className="h-12 w-12 text-gray-400" />
-                  </div>
-                )}
+            
+            {/* 基本資訊 */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  片名 <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={formData.title}
+                  onChange={handleChange}
+                  required
+                  className="input"
+                />
               </div>
               
-              {/* 上傳按鈕 */}
-              <div className="flex-1">
-                <label className="btn-secondary cursor-pointer inline-flex items-center gap-2">
-                  <Upload className="h-5 w-5" />
-                  選擇新圖片
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileChange}
-                    className="hidden"
-                  />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  英文片名
                 </label>
-                <p className="text-sm text-gray-500 mt-2">
-                  支援 JPEG、PNG、GIF、WebP 格式，最大 5MB
-                </p>
+                <input
+                  type="text"
+                  name="title_en"
+                  value={formData.title_en}
+                  onChange={handleChange}
+                  className="input"
+                />
               </div>
             </div>
-          </div>
-          
-          {/* 基本資訊 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* 簡介 */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                片名 <span className="text-red-500">*</span>
+                簡介
               </label>
-              <input
-                type="text"
-                name="title"
-                value={formData.title}
+              <textarea
+                name="description"
+                value={formData.description}
                 onChange={handleChange}
-                required
+                rows={3}
                 className="input"
               />
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                英文片名
-              </label>
-              <input
-                type="text"
-                name="title_en"
-                value={formData.title_en}
-                onChange={handleChange}
-                className="input"
-              />
-            </div>
-          </div>
-          
-          {/* 簡介 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              簡介
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              rows={3}
-              className="input"
-            />
-          </div>
-          
-          {/* 導演與演員 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                導演
-              </label>
-              <input
-                type="text"
-                name="director"
-                value={formData.director}
-                onChange={handleChange}
-                className="input"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                男演員
-              </label>
-              <input
-                type="text"
-                name="actor_male"
-                value={formData.actor_male}
-                onChange={handleChange}
-                className="input"
-              />
+            {/* 導演與演員 */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  導演
+                </label>
+                <input
+                  type="text"
+                  name="director"
+                  value={formData.director}
+                  onChange={handleChange}
+                  className="input"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  男演員
+                </label>
+                <input
+                  type="text"
+                  name="actor_male"
+                  value={formData.actor_male}
+                  onChange={handleChange}
+                  className="input"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  女演員
+                </label>
+                <input
+                  type="text"
+                  name="actor_female"
+                  value={formData.actor_female}
+                  onChange={handleChange}
+                  className="input"
+                />
+              </div>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                女演員
-              </label>
-              <input
-                type="text"
-                name="actor_female"
-                value={formData.actor_female}
-                onChange={handleChange}
-                className="input"
-              />
-            </div>
-          </div>
-          
-          {/* 其他資訊 */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                片長
-              </label>
-              <input
-                type="text"
-                name="duration"
-                value={formData.duration}
-                onChange={handleChange}
-                placeholder="例: 120分鐘"
-                className="input"
-              />
+            {/* 其他資訊 */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  片長
+                </label>
+                <input
+                  type="text"
+                  name="duration"
+                  value={formData.duration}
+                  onChange={handleChange}
+                  placeholder="例: 120分鐘"
+                  className="input"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  級別
+                </label>
+                <input
+                  type="text"
+                  name="rating"
+                  value={formData.rating}
+                  onChange={handleChange}
+                  placeholder="例: 普遍級"
+                  className="input"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  發音
+                </label>
+                <input
+                  type="text"
+                  name="language"
+                  value={formData.language}
+                  onChange={handleChange}
+                  placeholder="例: 國語"
+                  className="input"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  字幕
+                </label>
+                <input
+                  type="text"
+                  name="subtitle"
+                  value={formData.subtitle}
+                  onChange={handleChange}
+                  placeholder="例: 中文"
+                  className="input"
+                />
+              </div>
             </div>
             
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                級別
-              </label>
-              <input
-                type="text"
-                name="rating"
-                value={formData.rating}
-                onChange={handleChange}
-                placeholder="例: 普遍級"
-                className="input"
-              />
+            {/* 按鈕 */}
+            <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={onClose}
+                disabled={saving}
+                className="btn-secondary min-w-[100px]"
+              >
+                取消
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="btn-primary min-w-[120px]"
+              >
+                {saving ? (
+                  <>
+                    <Loader className="h-5 w-5 animate-spin" />
+                    儲存中...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="h-5 w-5" />
+                    儲存變更
+                  </>
+                )}
+              </button>
             </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                發音
-              </label>
-              <input
-                type="text"
-                name="language"
-                value={formData.language}
-                onChange={handleChange}
-                placeholder="例: 國語"
-                className="input"
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                字幕
-              </label>
-              <input
-                type="text"
-                name="subtitle"
-                value={formData.subtitle}
-                onChange={handleChange}
-                placeholder="例: 中文"
-                className="input"
-              />
-            </div>
-          </div>
-          
-          {/* 按鈕 */}
-          <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={saving}
-              className="btn-secondary min-w-[100px]"
-            >
-              取消
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="btn-primary min-w-[120px]"
-            >
-              {saving ? (
-                <>
-                  <Loader className="h-5 w-5 animate-spin" />
-                  儲存中...
-                </>
-              ) : (
-                <>
-                  <CheckCircle className="h-5 w-5" />
-                  儲存變更
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }
-

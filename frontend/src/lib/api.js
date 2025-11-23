@@ -15,9 +15,30 @@ const api = axios.create({
   },
 })
 
+function getAccessToken() {
+  if (typeof window === 'undefined') return null
+
+  const authKey = Object.keys(localStorage).find((key) => key.includes('auth-token')) || 'supabase.auth.token'
+  const raw = localStorage.getItem(authKey)
+
+  if (!raw) return null
+
+  try {
+    const parsed = JSON.parse(raw)
+    return (
+      parsed?.currentSession?.access_token ||
+      parsed?.session?.access_token ||
+      parsed?.access_token ||
+      null
+    )
+  } catch (error) {
+    return null
+  }
+}
+
 // 請求攔截器（添加認證 token）
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('supabase.auth.token')
+  const token = getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -220,6 +241,31 @@ export async function setReminderSchedule(data) {
  */
 export async function sendReminderNow(data) {
   const response = await api.post('/api/reminders/send', data)
+  return response.data
+}
+
+export async function registerAccount(data) {
+  const response = await api.post('/api/auth/register', data)
+  return response.data
+}
+
+export async function requestPasswordReset(email) {
+  const response = await api.post('/api/auth/forgot-password', { email })
+  return response.data
+}
+
+export async function resetPassword(token, password) {
+  const response = await api.post('/api/auth/reset-password', { token, password })
+  return response.data
+}
+
+export async function changePassword(payload) {
+  const response = await api.post('/api/auth/change-password', payload)
+  return response.data
+}
+
+export async function adminResetUserPassword(userId, newPassword) {
+  const response = await api.post('/api/auth/admin-reset-password', { userId, newPassword })
   return response.data
 }
 

@@ -29,6 +29,92 @@ async function getMailRecipientsByEvent(eventType) {
   }
 }
 
+export async function sendWelcomeEmail({ to, name }) {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+  const emailBody = `
+    <!DOCTYPE html>
+    <html lang="zh-Hant">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <style>
+        body { font-family: 'Noto Sans TC', 'PingFang TC', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background:#f8f9fb; margin:0; padding:32px 8px; color:#1f2633; }
+        .card { max-width:640px; margin:0 auto; background:#fff; border-radius:24px; border:1px solid rgba(15,23,42,0.06); box-shadow: 0 30px 80px rgba(15,23,42,0.08); overflow:hidden; }
+        .hero { background:linear-gradient(135deg,#111827,#312e81); padding:40px; color:#fff; text-align:center; }
+        .hero h1 { margin:0; font-size:28px; letter-spacing:2px; }
+        .content { padding:40px; line-height:1.8; font-size:15px; }
+        .button { display:inline-block; margin:24px 0; padding:14px 32px; border-radius:999px; background:#111827; color:#fff !important; text-decoration:none; font-weight:600; letter-spacing:1px; }
+        .footer { padding:28px; font-size:12px; color:#94a3b8; text-align:center; background:#f8fafc; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="hero">
+          <h1>MVI 影片選擇系統</h1>
+          <p style="margin-top:12px; letter-spacing:3px; font-size:13px; opacity:.85;">歡迎加入</p>
+        </div>
+        <div class="content">
+          <p>親愛的 ${name || '使用者'}，您好：</p>
+          <p>歡迎加入 <strong>MVI 影片選擇系統</strong>。您可以使用註冊時設定的帳號密碼登入，立即開始挑選每月的專屬片單。</p>
+          <p>若您不是此信件的預期收件者，請忽略本郵件或與客服聯繫。</p>
+          <a class="button" href="${frontendUrl}/login" target="_blank" rel="noreferrer">前往登入</a>
+          <p style="margin-top:32px; font-size:14px; color:#475569;">祝您觀影愉快！<br/>飛訊資訊科技有限公司</p>
+        </div>
+        <div class="footer">
+          MVI 影片選擇系統 · Fashion Info Tech Co., Ltd. · 此信件為系統發送請勿直接回覆
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  await sendEmail({ to, subject: '歡迎加入 MVI 影片選擇系統', body: emailBody })
+}
+
+export async function sendPasswordResetEmail({ to, name, token }) {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173'
+  const resetUrl = `${frontendUrl}/reset-password?token=${encodeURIComponent(token)}`
+  const emailBody = `
+    <!DOCTYPE html>
+    <html lang="zh-Hant">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <style>
+        body { font-family: 'Noto Sans TC', 'PingFang TC', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif; background:#0f172a; margin:0; padding:48px 16px; color:#0f172a; }
+        .card { max-width:600px; margin:0 auto; background:linear-gradient(180deg,#ffffff 0%,#e2e8f0 120%); border-radius:28px; box-shadow:0 40px 90px rgba(15,23,42,0.35); overflow:hidden; }
+        .header { padding:36px; text-align:center; border-bottom:1px solid rgba(148,163,184,0.2); }
+        .header h1 { margin:0; font-size:24px; color:#0f172a; letter-spacing:2px; }
+        .content { padding:36px; font-size:15px; line-height:1.8; color:#1e293b; }
+        .badge { display:inline-block; padding:8px 16px; border-radius:999px; background:#e2e8f0; letter-spacing:2px; font-size:11px; margin-bottom:16px; color:#475569; }
+        .button { display:inline-block; margin:24px 0; padding:14px 32px; border-radius:18px; background:#0f172a; color:#fff !important; text-decoration:none; font-weight:600; box-shadow:0 12px 30px rgba(15,23,42,0.45); }
+        .footer { padding:24px; text-align:center; font-size:12px; color:#475569; background:#f8fafc; }
+      </style>
+    </head>
+    <body>
+      <div class="card">
+        <div class="header">
+          <span class="badge">RESET PASSWORD</span>
+          <h1>重設您的登入密碼</h1>
+        </div>
+        <div class="content">
+          <p>${name || '親愛的使用者'}，您好：</p>
+          <p>我們收到了您重設密碼的需求。請於 60 分鐘內點擊下方按鈕完成密碼重設。</p>
+          <a class="button" href="${resetUrl}" target="_blank" rel="noreferrer">立即重設密碼</a>
+          <p style="font-size:13px; color:#475569;">若您沒有提出此需求，請忽略本郵件，您的帳號安全不受影響。</p>
+          <p style="font-size:13px; color:#94a3b8; margin-top:32px;">此連結為一次性，使用後將立即失效。</p>
+        </div>
+        <div class="footer">
+          MVI 影片選擇系統 · Fashion Info Tech Co., Ltd.<br/>support@fas.com.tw
+        </div>
+      </div>
+    </body>
+    </html>
+  `
+
+  await sendEmail({ to, subject: '密碼重設指示｜MVI 影片選擇系統', body: emailBody })
+}
+
 async function getUploaderByBatch(batch) {
   if (!batch?.uploader_id) return null;
 

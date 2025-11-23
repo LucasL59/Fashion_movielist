@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, LogOut, Settings, Upload, Users, Edit, Mail } from 'lucide-react'
+import { Film, LogOut, Settings, Upload, Users, Edit, Mail, Menu, X } from 'lucide-react'
 import Modal from './Modal'
 import { PrivacyPolicy, TermsOfService } from './LegalDocs'
 
@@ -16,6 +16,7 @@ export default function Layout({ children }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [activeModal, setActiveModal] = useState(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   
   async function handleSignOut() {
     try {
@@ -26,12 +27,13 @@ export default function Layout({ children }) {
     }
   }
 
-  const NavLink = ({ to, icon: Icon, children }) => {
+  const NavLink = ({ to, icon: Icon, children, onClick }) => {
     const isActive = location.pathname.startsWith(to) && (to !== '/' || location.pathname === '/')
     
     return (
       <Link
         to={to}
+        onClick={onClick}
         className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
           isActive 
             ? 'bg-gray-900 text-white shadow-md' 
@@ -44,6 +46,25 @@ export default function Layout({ children }) {
     )
   }
   
+  const MobileNavLink = ({ to, icon: Icon, children }) => {
+    const isActive = location.pathname.startsWith(to) && (to !== '/' || location.pathname === '/')
+    
+    return (
+      <Link
+        to={to}
+        onClick={() => setMobileMenuOpen(false)}
+        className={`flex items-center px-4 py-3 text-base font-medium rounded-xl transition-all duration-200 ${
+          isActive 
+            ? 'bg-primary-50 text-primary-700' 
+            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+        }`}
+      >
+        {Icon && <Icon className={`h-5 w-5 mr-3 ${isActive ? 'text-primary-600' : 'text-gray-400'}`} />}
+        {children}
+      </Link>
+    )
+  }
+
   const supportSubject = user 
     ? `[${user.name || user.email}] - MVI影片選擇系統問題 - `
     : 'MVI影片選擇系統問題 - '
@@ -54,8 +75,15 @@ export default function Layout({ children }) {
       <nav className="sticky top-0 z-50 w-full glass">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 items-center">
-            {/* Logo */}
-            <div className="flex items-center gap-8">
+            {/* Logo & Hamburger */}
+            <div className="flex items-center gap-4 md:gap-8">
+              <button
+                className="md:hidden p-2 -ml-2 text-gray-500 hover:text-gray-900 rounded-lg"
+                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              >
+                {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              </button>
+
               <Link to="/" className="flex items-center group">
                 <div className="bg-primary-600 rounded-xl p-1.5 shadow-lg shadow-primary-600/20 transition-transform group-hover:scale-105 group-hover:rotate-3">
                   <Film className="h-5 w-5 text-white" />
@@ -112,6 +140,37 @@ export default function Layout({ children }) {
             </div>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        {mobileMenuOpen && (
+          <div className="md:hidden border-t border-gray-200 bg-white/95 backdrop-blur-xl absolute w-full left-0 shadow-lg animate-slide-down">
+            <div className="px-4 pt-2 pb-4 space-y-1">
+              <div className="px-4 py-3 mb-2 border-b border-gray-100">
+                <p className="text-sm font-medium text-gray-900">{user?.name}</p>
+                <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+              </div>
+
+              {(user?.role === 'admin' || user?.role === 'uploader') ? (
+                <>
+                  <MobileNavLink to="/admin" icon={Upload}>上傳管理</MobileNavLink>
+                  <MobileNavLink to="/videos" icon={Edit}>影片管理</MobileNavLink>
+                  {user?.role === 'admin' && (
+                    <>
+                      <MobileNavLink to="/users" icon={Users}>用戶管理</MobileNavLink>
+                      <MobileNavLink to="/mail" icon={Mail}>郵件管理</MobileNavLink>
+                    </>
+                  )}
+                </>
+              ) : (
+                <MobileNavLink to="/movies" icon={Film}>選擇影片</MobileNavLink>
+              )}
+              
+              {(user?.role === 'admin' || user?.role === 'uploader') && (
+                <MobileNavLink to="/movies" icon={Film}>選擇影片</MobileNavLink>
+              )}
+            </div>
+          </div>
+        )}
       </nav>
       
       {/* 主內容 */}
@@ -124,7 +183,7 @@ export default function Layout({ children }) {
       {/* 頁尾 */}
       <footer className="bg-white border-t border-gray-100 mt-auto">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div className="text-center md:text-left">
               <p className="text-sm font-bold text-gray-900">
                 MVI 影片選擇系統

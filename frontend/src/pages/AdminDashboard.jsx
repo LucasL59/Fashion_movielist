@@ -143,7 +143,7 @@ export default function AdminDashboard() {
             <h2 className="text-xl font-semibold text-gray-900">客戶選擇明細</h2>
             <p className="text-sm text-gray-500">即時掌握誰已完成、誰尚未提交</p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-2 w-full md:w-auto">
             {[
               { value: 'all', label: '全部', count: selectionDetails.length },
               { value: 'submitted', label: '已完成', count: submittedCount },
@@ -153,27 +153,30 @@ export default function AdminDashboard() {
                 key={filter.value}
                 type="button"
                 onClick={() => setStatusFilter(filter.value)}
-                className={`px-4 py-2 rounded-full border transition-colors ${
+                className={`px-2 py-2 rounded-xl border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 md:flex-row md:px-4 md:rounded-full ${
                   statusFilter === filter.value
-                    ? 'bg-primary-600 text-white border-primary-600'
-                    : 'border-gray-200 text-gray-600 hover:border-primary-200 hover:text-primary-600'
+                    ? 'bg-primary-600 text-white border-primary-600 shadow-md'
+                    : 'border-gray-200 text-gray-600 hover:border-primary-200 hover:text-primary-600 bg-white'
                 }`}
               >
-                {filter.label}（{filter.count}）
+                <span>{filter.label}</span>
+                <span className={`text-xs ${statusFilter === filter.value ? 'text-primary-100' : 'text-gray-400'}`}>
+                  ({filter.count})
+                </span>
               </button>
             ))}
           </div>
         </div>
 
         <div className="overflow-x-auto -mx-4 sm:mx-0">
-          <table className="min-w-full divide-y divide-gray-100">
+          <table className="min-w-[800px] divide-y divide-gray-100 w-full">
             <thead>
               <tr className="text-left text-xs font-semibold uppercase text-gray-500 tracking-wider">
-                <th className="px-4 py-3">客戶名稱</th>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">狀態</th>
-                <th className="px-4 py-3">選擇數量</th>
-                <th className="px-4 py-3">提交時間</th>
+                <th className="px-4 py-3 whitespace-nowrap">客戶名稱</th>
+                <th className="px-4 py-3 whitespace-nowrap">Email</th>
+                <th className="px-4 py-3 whitespace-nowrap">狀態</th>
+                <th className="px-4 py-3 whitespace-nowrap">選擇數量</th>
+                <th className="px-4 py-3 whitespace-nowrap">提交時間</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -188,11 +191,11 @@ export default function AdminDashboard() {
               )}
               {filteredDetails.map((detail) => (
                 <tr key={detail.id} className="hover:bg-primary-50/50 transition-colors">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <p className="font-medium text-gray-900">{detail.name || '—'}</p>
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{detail.email}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">{detail.email}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
                     <span
                       className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium ${
                         detail.status === 'submitted'
@@ -208,10 +211,10 @@ export default function AdminDashboard() {
                       {detail.status === 'submitted' ? '已完成' : '待提交'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-gray-900 font-semibold">
+                  <td className="px-4 py-3 text-gray-900 font-semibold whitespace-nowrap">
                     {detail.videoCount || 0} 部
                   </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">
+                  <td className="px-4 py-3 text-sm text-gray-500 whitespace-nowrap">
                     {detail.submittedAt
                       ? new Date(detail.submittedAt).toLocaleString('zh-TW')
                       : '—'}

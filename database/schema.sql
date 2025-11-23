@@ -221,7 +221,27 @@ CREATE POLICY "Admins can view all selections"
   );
 
 -- ==========================================
--- 5. 建立 Mail Rules 表（郵件通知設定）
+-- 5. 建立 Password Resets 表（密碼重設權杖）
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.password_resets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_user ON public.password_resets(user_id);
+CREATE INDEX IF NOT EXISTS idx_password_resets_token ON public.password_resets(token_hash);
+
+ALTER TABLE public.password_resets ENABLE ROW LEVEL SECURITY;
+
+-- 僅允許服務端透過 service key 操作，故不建立一般使用者政策
+
+-- ==========================================
+-- 6. 建立 Mail Rules 表（郵件通知設定）
 -- ==========================================
 
 CREATE TABLE IF NOT EXISTS public.mail_rules (
@@ -257,7 +277,7 @@ CREATE POLICY "Admins can manage mail rules"
   );
 
 -- ==========================================
--- 6. 建立觸發器（自動更新 updated_at）
+-- 7. 建立觸發器（自動更新 updated_at）
 -- ==========================================
 
 -- 建立觸發器函數
@@ -290,8 +310,14 @@ CREATE TRIGGER set_selections_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION public.handle_updated_at();
 
+-- Password reset tokens 亦需自動更新
+CREATE TRIGGER set_password_resets_updated_at
+  BEFORE UPDATE ON public.password_resets
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_updated_at();
+
 -- ==========================================
--- 7. 建立 Storage Bucket（影片縮圖）
+-- 8. 建立 Storage Bucket（影片縮圖）
 -- ==========================================
 
 -- 注意：此操作需要在 Supabase Dashboard 的 Storage 頁面手動建立
@@ -332,7 +358,7 @@ CREATE POLICY "Admins can delete thumbnails"
   );
 
 -- ==========================================
--- 8. 建立註冊時自動建立 Profile 的觸發器
+-- 9. 建立註冊時自動建立 Profile 的觸發器
 -- ==========================================
 
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -355,7 +381,7 @@ CREATE TRIGGER on_auth_user_created
   EXECUTE FUNCTION public.handle_new_user();
 
 -- ==========================================
--- 9. 建立視圖（方便查詢）
+-- 10. 建立視圖（方便查詢）
 -- ==========================================
 
 -- 批次統計視圖

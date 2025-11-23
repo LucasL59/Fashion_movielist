@@ -1,13 +1,8 @@
-/**
- * 設定頁面
- * 
- * 管理用戶設定和提醒通知
- */
-
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { User, Mail, Bell, CheckCircle, AlertCircle } from 'lucide-react'
-import { setReminderSchedule, sendReminderNow } from '../lib/api'
+import { User, Mail, Bell, CheckCircle, AlertCircle, ShieldCheck } from 'lucide-react'
+import { setReminderSchedule, sendReminderNow, changePassword } from '../lib/api'
+import { useToast } from '../contexts/ToastContext'
 import Select from '../components/Select'
 
 export default function Settings() {
@@ -16,6 +11,7 @@ export default function Settings() {
   const [updating, setUpdating] = useState(false)
   const [updateSuccess, setUpdateSuccess] = useState(false)
   const [updateError, setUpdateError] = useState('')
+  const { showToast } = useToast()
   
   // 提醒設定
   const [reminderDay, setReminderDay] = useState('1')
@@ -25,6 +21,16 @@ export default function Settings() {
   const [settingReminder, setSettingReminder] = useState(false)
   const [reminderSuccess, setReminderSuccess] = useState(false)
   const [reminderError, setReminderError] = useState('')
+
+  // 密碼設定
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  })
+  const [passwordLoading, setPasswordLoading] = useState(false)
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccess, setPasswordSuccess] = useState(false)
   
   async function handleUpdateProfile(e) {
     e.preventDefault()
@@ -33,7 +39,7 @@ export default function Settings() {
       setUpdateError('請輸入姓名')
       return
     }
-    
+
     try {
       setUpdating(true)
       setUpdateError('')
@@ -48,6 +54,44 @@ export default function Settings() {
       setUpdateError('更新失敗，請稍後再試')
     } finally {
       setUpdating(false)
+    }
+  }
+
+  async function handleChangePassword(e) {
+    e.preventDefault()
+
+    if (!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword) {
+      setPasswordError('請填寫所有欄位')
+      return
+    }
+
+    if (passwordForm.newPassword.length < 6) {
+      setPasswordError('新密碼至少需要 6 個字元')
+      return
+    }
+
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setPasswordError('確認密碼不一致')
+      return
+    }
+
+    try {
+      setPasswordLoading(true)
+      setPasswordError('')
+      await changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword,
+      })
+      setPasswordSuccess(true)
+      showToast('密碼已更新', 'success')
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+
+      setTimeout(() => setPasswordSuccess(false), 3000)
+    } catch (error) {
+      console.error('修改密碼失敗:', error)
+      setPasswordError(error.response?.data?.message || '修改密碼失敗，請稍後再試')
+    } finally {
+      setPasswordLoading(false)
     }
   }
   
@@ -173,7 +217,71 @@ export default function Settings() {
           </button>
         </form>
       </div>
-      
+
+      {/* 密碼設定 */}
+      <div className="card">
+        <div className="flex items-center gap-3 mb-6">
+          <ShieldCheck className="h-6 w-6 text-primary-600" />
+          <h2 className="text-xl font-bold text-gray-900">安全性與密碼</h2>
+        </div>
+
+        {passwordSuccess && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 mb-4">
+            <CheckCircle className="h-5 w-5 text-green-600 mt-0.5" />
+            <p className="text-sm text-green-700">密碼已更新</p>
+          </div>
+        )}
+
+        {passwordError && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 mb-4">
+            <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
+            <p className="text-sm text-red-800">{passwordError}</p>
+          </div>
+        )}
+
+        <form onSubmit={handleChangePassword} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">目前密碼</label>
+            <input
+              type="password"
+              value={passwordForm.currentPassword}
+              onChange={(e) => setPasswordForm((prev) => ({ ...prev, currentPassword: e.target.value }))}
+              className="input"
+              placeholder="輸入目前密碼"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">新密碼</label>
+              <input
+                type="password"
+                value={passwordForm.newPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, newPassword: e.target.value }))}
+                className="input"
+                placeholder="至少 6 個字元"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">確認新密碼</label>
+              <input
+                type="password"
+                value={passwordForm.confirmPassword}
+                onChange={(e) => setPasswordForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+                className="input"
+                placeholder="再次輸入新密碼"
+                required
+              />
+            </div>
+          </div>
+
+          <button type="submit" className="btn btn-primary" disabled={passwordLoading}>
+            {passwordLoading ? '更新中...' : '更新密碼'}
+          </button>
+        </form>
+      </div>
+
       {/* 提醒設定（僅管理員可見，uploader 不可見） */}
       {user?.role === 'admin' && (
         <div className="card">
@@ -181,7 +289,7 @@ export default function Settings() {
             <Bell className="h-6 w-6 text-primary-600" />
             <h2 className="text-xl font-bold text-gray-900">提醒通知設定</h2>
           </div>
-          
+
           {reminderSuccess && (
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 mb-6">
               <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />

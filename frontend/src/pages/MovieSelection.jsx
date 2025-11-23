@@ -5,10 +5,12 @@
  */
 
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Filter } from 'lucide-react'
+import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Filter, Send } from 'lucide-react'
 import MovieCard from '../components/MovieCard'
 import Select from '../components/Select'
+import BrandTransition from '../components/BrandTransition'
 import { getLatestVideos, getAvailableMonths, submitSelection } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
@@ -187,17 +189,9 @@ export default function MovieSelection() {
   
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1)
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center">
-        <div className="w-16 h-16 border-4 border-primary-200 border-t-primary-600 rounded-full animate-spin mb-4"></div>
-        <p className="text-gray-500 font-medium animate-pulse">載入精彩影片中...</p>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-8 pb-24">
+      <BrandTransition isVisible={loading || loadingMonths} />
       {/* 頂部控制列 - Glass Panel */}
       <div className="sticky top-24 z-30 glass-panel rounded-2xl p-4 mb-8 transition-all duration-300">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -222,10 +216,10 @@ export default function MovieSelection() {
           </div>
 
           {/* 右側：視圖切換與分頁 */}
-          <div className="flex items-center gap-3 justify-end">
-            {/* 分頁按鈕 (Desktop) */}
+          <div className="flex items-center gap-3 justify-end w-full md:w-auto">
+            {/* 分頁按鈕 */}
             {totalPages > 1 && (
-              <div className="hidden lg:flex bg-gray-100/80 p-1 rounded-xl items-center mr-2">
+              <div className="flex bg-gray-100/80 p-1 rounded-xl items-center mr-2 overflow-x-auto max-w-[200px] sm:max-w-none scrollbar-hide">
                 {pageNumbers.map((page) => (
                   <button
                     key={page}
@@ -233,7 +227,7 @@ export default function MovieSelection() {
                       setCurrentPage(page)
                       setShowAllPages(false)
                     }}
-                    className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${
+                    className={`min-w-[2rem] h-8 rounded-lg text-sm font-medium transition-all flex-shrink-0 ${
                       currentPage === page && !showAllPages
                         ? 'bg-white text-primary-600 shadow-sm'
                         : 'text-gray-500 hover:text-gray-700'
@@ -244,7 +238,7 @@ export default function MovieSelection() {
                 ))}
                 <button
                     onClick={() => setShowAllPages(!showAllPages)}
-                    className={`px-3 h-8 rounded-lg text-xs font-medium transition-all ml-1 ${
+                    className={`px-3 h-8 rounded-lg text-xs font-medium transition-all ml-1 whitespace-nowrap ${
                       showAllPages
                         ? 'bg-white text-primary-600 shadow-sm'
                         : 'text-gray-500 hover:text-gray-700'
@@ -256,7 +250,7 @@ export default function MovieSelection() {
             )}
 
             {/* 視圖切換 */}
-            <div className="bg-gray-100/80 p-1 rounded-xl flex items-center">
+            <div className="bg-gray-100/80 p-1 rounded-xl flex items-center flex-shrink-0">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-lg transition-all ${
@@ -283,7 +277,7 @@ export default function MovieSelection() {
       </div>
       
       {/* 影片列表內容 */}
-      {!batch || videos.length === 0 ? (
+      {!loading && (!batch || videos.length === 0) ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="bg-gray-100 p-6 rounded-full mb-6">
             <Film className="h-12 w-12 text-gray-300" />
@@ -350,42 +344,60 @@ export default function MovieSelection() {
         </div>
       )}
       
-      {/* Floating Selection Bar - Always visible when items are selected */}
-      <div className={`fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-gray-200/50 py-3 px-4 transition-transform duration-300 z-40 ${
-        selectedIds.length > 0 ? 'translate-y-0' : 'translate-y-full'
-      }`}>
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-primary-100 text-primary-700 p-2 rounded-lg">
-              <ShoppingCart className="h-6 w-6" />
+      {createPortal(
+        <div className={`fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-200/50 py-3 px-4 transition-transform duration-300 z-[100] ${
+          selectedIds.length > 0 ? 'translate-y-0' : 'translate-y-full'
+        }`}>
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center justify-between w-full sm:w-auto gap-3">
+              <div className="flex items-center gap-3">
+                <div className="bg-primary-100 text-primary-700 p-2 rounded-lg">
+                  <ShoppingCart className="h-6 w-6" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">已選擇</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {selectedIds.length} <span className="text-base font-normal text-gray-500">部影片</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedIds([])}
+                className="text-sm text-gray-400 hover:text-red-500 transition-colors px-2 sm:hidden"
+              >
+                清除
+              </button>
             </div>
-            <div>
-              <p className="text-sm font-medium text-gray-500">已選擇</p>
-              <p className="text-2xl font-display font-bold text-gray-900">
-                {selectedIds.length} <span className="text-base font-normal text-gray-500">部影片</span>
-              </p>
+
+            <div className="flex items-center gap-4 w-full sm:w-auto">
+              <button
+                onClick={() => setSelectedIds([])}
+                className="hidden sm:block btn-ghost text-sm"
+              >
+                清除全部
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting || selectedIds.length === 0}
+                className="btn-primary flex-1 sm:flex-none w-full sm:w-auto px-8 py-3 text-base shadow-lg shadow-primary-500/25"
+              >
+                {submitting ? (
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader className="h-5 w-5 animate-spin" />
+                    處理中...
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-center gap-2">
+                    提交選擇
+                    <Send className="h-5 w-5 ml-2" />
+                  </div>
+                )}
+              </button>
             </div>
           </div>
-          
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="btn btn-primary btn-lg shadow-xl shadow-primary-500/20 min-w-[200px]"
-          >
-            {submitting ? (
-              <div className="flex items-center gap-2">
-                <Loader className="h-5 w-5 animate-spin" />
-                處理中...
-              </div>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span>確認提交</span>
-                <CheckCircle className="h-5 w-5" />
-              </div>
-            )}
-          </button>
-        </div>
-      </div>
+        </div>,
+        document.body
+      )}
     </div>
   )
 }

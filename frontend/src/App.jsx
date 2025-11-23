@@ -21,6 +21,8 @@ import VideoManagement from './pages/VideoManagement'
 import SelectionHistory from './pages/SelectionHistory'
 import UploadManagement from './pages/UploadManagement'
 import MailManagement from './pages/MailManagement'
+import ResetPassword from './pages/ResetPassword'
+import DemoTransition from './pages/DemoTransition'
 
 // 佈局組件
 import Layout from './components/Layout'
@@ -61,6 +63,8 @@ function AppRoutes() {
       {/* 公開路由 */}
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+      <Route path="/demo-transition" element={<DemoTransition />} />
       
       {/* 受保護的路由 */}
       <Route path="/" element={

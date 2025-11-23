@@ -80,7 +80,8 @@ export async function parseExcelAndUpload(file, uploaderId, batchName, month) {
       const row = worksheet.getRow(rowNumber);
       
       // 檢查是否為空行
-      if (!row.getCell(columnMap.title).value) {
+      const titleVal = getCellValue(row.getCell(columnMap.title));
+      if (!titleVal) {
         continue;
       }
       
@@ -96,16 +97,16 @@ export async function parseExcelAndUpload(file, uploaderId, batchName, month) {
       // 建立影片資料
       const video = {
         batch_id: batch.id,
-        title: row.getCell(columnMap.title).value?.toString() || '',
-        title_en: row.getCell(columnMap.titleEn).value?.toString() || '',
-        description: row.getCell(columnMap.description).value?.toString() || '',
-        director: row.getCell(columnMap.director).value?.toString() || '',
-        actor_male: row.getCell(columnMap.actorMale).value?.toString() || '',
-        actor_female: row.getCell(columnMap.actorFemale).value?.toString() || '',
-        duration: parseInt(row.getCell(columnMap.duration).value) || null,
-        rating: row.getCell(columnMap.rating).value?.toString() || '',
-        language: row.getCell(columnMap.language).value?.toString() || '',
-        subtitle: row.getCell(columnMap.subtitle).value?.toString() || '',
+        title: titleVal,
+        title_en: getCellValue(row.getCell(columnMap.titleEn)),
+        description: getCellValue(row.getCell(columnMap.description)),
+        director: getCellValue(row.getCell(columnMap.director)),
+        actor_male: getCellValue(row.getCell(columnMap.actorMale)),
+        actor_female: getCellValue(row.getCell(columnMap.actorFemale)),
+        duration: parseInt(getCellValue(row.getCell(columnMap.duration))) || null,
+        rating: getCellValue(row.getCell(columnMap.rating)),
+        language: getCellValue(row.getCell(columnMap.language)),
+        subtitle: getCellValue(row.getCell(columnMap.subtitle)),
         thumbnail_url: thumbnailUrl,
         row_number: rowNumber
       };
@@ -242,5 +243,42 @@ async function uploadImageToStorage(image, batchId) {
     console.error('上傳圖片錯誤:', error);
     return null;
   }
+}
+
+/**
+ * 獲取儲存格的文字值，處理 Rich Text 和公式
+ * 
+ * @param {Object} cell - ExcelJS Cell 物件
+ * @returns {string} 儲存格文字內容
+ */
+function getCellValue(cell) {
+  if (!cell || cell.value === null || cell.value === undefined) {
+    return '';
+  }
+  
+  const value = cell.value;
+  
+  // 處理 Rich Text
+  if (typeof value === 'object' && value.richText) {
+    return value.richText.map(part => part.text).join('');
+  }
+  
+  // 處理超連結
+  if (typeof value === 'object' && value.text) {
+    return value.text;
+  }
+  
+  // 處理公式結果
+  if (typeof value === 'object' && value.result !== undefined) {
+    return value.result.toString();
+  }
+  
+  // 處理日期
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  
+  // 一般文字或數字
+  return value.toString();
 }
 

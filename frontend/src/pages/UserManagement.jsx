@@ -6,9 +6,12 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Users, Shield, Upload as UploadIcon, User, CheckCircle, AlertCircle } from 'lucide-react'
+import { Users, Shield, Upload as UploadIcon, User, CheckCircle, AlertCircle, KeyRound } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import Select from '../components/Select'
+import Modal from '../components/Modal'
+import { adminResetUserPassword } from '../lib/api'
+import { useToast } from '../contexts/ToastContext'
 
 export default function UserManagement() {
   const { user } = useAuth()
@@ -17,12 +20,55 @@ export default function UserManagement() {
   const [updating, setUpdating] = useState(null)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
+  const [resetTarget, setResetTarget] = useState(null)
+  const [resetForm, setResetForm] = useState({ password: '', confirmPassword: '' })
+  const [resetError, setResetError] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const { showToast } = useToast()
   
   useEffect(() => {
     if (user?.role === 'admin') {
       loadUsers()
     }
   }, [user])
+
+  function openResetModal(targetUser) {
+    setResetTarget(targetUser)
+    setResetForm({ password: '', confirmPassword: '' })
+    setResetError('')
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault()
+
+    if (!resetForm.password || !resetForm.confirmPassword) {
+      setResetError('請填寫所有欄位')
+      return
+    }
+
+    if (resetForm.password.length < 6) {
+      setResetError('新密碼至少需 6 個字元')
+      return
+    }
+
+    if (resetForm.password !== resetForm.confirmPassword) {
+      setResetError('確認密碼不一致')
+      return
+    }
+
+    try {
+      setResetLoading(true)
+      setResetError('')
+      await adminResetUserPassword(resetTarget.id, resetForm.password)
+      showToast('已重設該用戶密碼', 'success')
+      setResetTarget(null)
+    } catch (err) {
+      console.error('重設密碼失敗:', err)
+      setResetError(err.response?.data?.message || '重設密碼失敗，請稍後再試')
+    } finally {
+      setResetLoading(false)
+    }
+  }
   
   async function loadUsers() {
     try {
@@ -188,6 +234,7 @@ export default function UserManagement() {
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">Email</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">目前角色</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">變更角色</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">密碼操作</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">註冊時間</th>
                 </tr>
               </thead>
@@ -230,6 +277,15 @@ export default function UserManagement() {
                         </div>
                       )}
                     </td>
+                    <td className="py-3 px-4">
+                      <button
+                        type="button"
+                        onClick={() => openResetModal(u)}
+                        className="btn btn-ghost text-sm flex items-center gap-2"
+                      >
+                        <KeyRound className="h-4 w-4" /> 重設密碼
+                      </button>
+                    </td>
                     <td className="py-3 px-4 text-sm text-gray-500">
                       {new Date(u.created_at).toLocaleDateString('zh-TW')}
                     </td>
@@ -240,6 +296,53 @@ export default function UserManagement() {
           </div>
         )}
       </div>
+
+      <Modal
+        isOpen={!!resetTarget}
+        onClose={() => setResetTarget(null)}
+        title={`重設密碼 - ${resetTarget?.name || ''}`}
+        footer={null}
+      >
+        <form onSubmit={handleResetPassword} className="space-y-4">
+          {resetError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              {resetError}
+            </div>
+          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">新密碼</label>
+            <input
+              type="password"
+              name="password"
+              value={resetForm.password}
+              onChange={(e) => setResetForm((prev) => ({ ...prev, password: e.target.value }))}
+              className="input"
+              placeholder="至少 6 個字元"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">確認新密碼</label>
+            <input
+              type="password"
+              name="confirmPassword"
+              value={resetForm.confirmPassword}
+              onChange={(e) => setResetForm((prev) => ({ ...prev, confirmPassword: e.target.value }))}
+              className="input"
+              placeholder="再次輸入新密碼"
+              required
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" className="btn btn-ghost" onClick={() => setResetTarget(null)}>
+              取消
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={resetLoading}>
+              {resetLoading ? '處理中...' : '重設密碼'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

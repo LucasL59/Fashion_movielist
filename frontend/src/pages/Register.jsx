@@ -4,8 +4,9 @@
 
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
 import { Film, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react'
+import { registerAccount } from '../lib/api'
+import { useToast } from '../contexts/ToastContext'
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -18,8 +19,8 @@ export default function Register() {
   const [success, setSuccess] = useState(false)
   const [loading, setLoading] = useState(false)
   
-  const { signUp } = useAuth()
   const navigate = useNavigate()
+  const { showToast } = useToast()
   
   function handleChange(e) {
     setFormData({
@@ -50,8 +51,13 @@ export default function Register() {
     try {
       setError('')
       setLoading(true)
-      await signUp(formData.email, formData.password, formData.name)
+      await registerAccount({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      })
       setSuccess(true)
+      showToast('註冊成功，請至 Email 查看通知', 'success')
       
       // 3 秒後跳轉到登入頁
       setTimeout(() => {
@@ -59,7 +65,7 @@ export default function Register() {
       }, 3000)
     } catch (error) {
       console.error('註冊失敗:', error)
-      setError(error.message || '註冊失敗，請稍後再試')
+      setError(error.response?.data?.message || error.message || '註冊失敗，請稍後再試')
     } finally {
       setLoading(false)
     }
