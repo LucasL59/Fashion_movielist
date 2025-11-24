@@ -5,7 +5,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Mail, ShieldCheck, Info, AlertTriangle, Clock, Calendar, ToggleLeft, ToggleRight, Save, Check, X } from 'lucide-react'
+import { Plus, Trash2, Mail, ShieldCheck, Info, AlertTriangle, Clock, Calendar, X } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { createMailRule, deleteMailRule, getMailRules, getReminderSettings, setReminderSchedule } from '../lib/api'
 import Select from '../components/Select'
@@ -24,6 +24,8 @@ const MAIL_EVENTS = [
     description: '有新的影片清單上架時通知輸控團隊（預設：通知所有使用者，實際寄信時會排除上傳者本人）',
   },
 ]
+
+const DEFAULT_REMINDER_MESSAGE = '請記得上傳本月的影片清單'
 
 const initialFormState = MAIL_EVENTS.reduce((acc, event) => {
   acc[event.value] = { name: '', email: '' }
@@ -50,14 +52,13 @@ export default function MailManagement() {
     enabled: false,
     dayOfMonth: 1,
     hourOfDay: 9,
-    message: '請記得上傳本月的影片清單',
-    recipientType: 'uploader', // 'uploader' | 'custom'
-    extraEmails: [], // Array of strings
-    recipientTypeUploader: true, // Helper state for UI
+    message: DEFAULT_REMINDER_MESSAGE,
+    extraEmails: [],
   })
   const [newExtraEmail, setNewExtraEmail] = useState('')
   const [reminderLoading, setReminderLoading] = useState(false)
-  const [reminderSaving, setReminderSaving] = useState(false)
+  const [reminderSyncing, setReminderSyncing] = useState(false)
+  const [messageDraft, setMessageDraft] = useState(DEFAULT_REMINDER_MESSAGE)
 
   const [loading, setLoading] = useState(true)
   const [formState, setFormState] = useState(initialFormState)
@@ -89,14 +90,16 @@ export default function MailManagement() {
       const hour = parseInt(parts[1] || '9', 10)
       const day = parseInt(parts[2] || '1', 10)
 
-      setReminderConfig({
+      const nextConfig = {
         enabled: config.enabled || false,
         dayOfMonth: day,
         hourOfDay: hour,
-        message: config.message || '請記得上傳本月的影片清單',
-        recipientTypeUploader: config.recipientType === 'uploader',
+        message: config.message || DEFAULT_REMINDER_MESSAGE,
         extraEmails: config.extraEmails || []
-      })
+      }
+
+      setReminderConfig(nextConfig)
+      setMessageDraft(nextConfig.message)
     } catch (error) {
       console.error('載入提醒設定失敗:', error)
       // 不顯示錯誤 toast，因為這不是主要功能，且可能是初次使用
@@ -105,58 +108,78 @@ export default function MailManagement() {
     }
   }
 
-  async function handleToggleReminder() {
-    const newEnabled = !reminderConfig.enabled
-    // Optimistic update
-    setReminderConfig(prev => ({ ...prev, enabled: newEnabled }))
-
-    try {
-      const cronSchedule = `0 ${reminderConfig.hourOfDay} ${reminderConfig.dayOfMonth} * *`
-      
-      const payload = {
-        enabled: newEnabled,
-        cronSchedule,
-        message: reminderConfig.message,
-        recipientType: reminderConfig.recipientTypeUploader ? 'uploader' : 'custom',
-        extraEmails: reminderConfig.extraEmails
-      }
-
-      await setReminderSchedule(payload)
-      showToast(newEnabled ? '每月提醒已啟用' : '每月提醒已停用', 'success')
-    } catch (error) {
-      console.error('切換提醒狀態失敗:', error)
-      // Revert state on error
-      setReminderConfig(prev => ({ ...prev, enabled: !newEnabled }))
-      showToast('切換狀態失敗，請稍後再試', 'error')
+  function buildReminderPayload(config) {
+    return {
+      enabled: config.enabled,
+      cronSchedule: `0 ${config.hourOfDay} ${config.dayOfMonth} * *`,
+      message: config.message,
+      recipientType: 'uploader',
+      extraEmails: config.extraEmails
     }
   }
 
-  async function saveReminderSettings() {
-    try {
-      setReminderSaving(true)
-      
-      // 建構 Cron
-      const cronSchedule = `0 ${reminderConfig.hourOfDay} ${reminderConfig.dayOfMonth} * *`
-      
-      const payload = {
-        enabled: reminderConfig.enabled,
-        cronSchedule,
-        message: reminderConfig.message,
-        recipientType: reminderConfig.recipientTypeUploader ? 'uploader' : 'custom',
-        extraEmails: reminderConfig.extraEmails
-      }
+  async function syncReminderConfig(nextConfig, { successMessage, errorMessage } = {}) {
+    if (reminderSyncing) return false
 
-      await setReminderSchedule(payload)
-      showToast('提醒設定已儲存', 'success')
+    const previousConfig = reminderConfig
+    setReminderConfig(nextConfig)
+    setReminderSyncing(true)
+
+    try {
+      await setReminderSchedule(buildReminderPayload(nextConfig))
+      if (successMessage) {
+        showToast(successMessage, 'success')
+      }
+      return true
     } catch (error) {
-      console.error('儲存提醒設定失敗:', error)
-      showToast('儲存失敗，請稍後再試', 'error')
+      console.error('更新提醒設定失敗:', error)
+      setReminderConfig(previousConfig)
+      showToast(errorMessage || '更新提醒設定失敗，請稍後再試', 'error')
+      return false
     } finally {
-      setReminderSaving(false)
+      setReminderSyncing(false)
     }
   }
 
-  function handleAddExtraEmail() {
+  async function handleToggleReminder() {
+    if (reminderSyncing) return
+    const nextConfig = { ...reminderConfig, enabled: !reminderConfig.enabled }
+    await syncReminderConfig(nextConfig, {
+      successMessage: nextConfig.enabled ? '每月提醒已啟用' : '每月提醒已停用'
+    })
+  }
+
+  async function handleReminderDayChange(day) {
+    if (reminderSyncing) return
+    const nextConfig = { ...reminderConfig, dayOfMonth: day }
+    await syncReminderConfig(nextConfig, { successMessage: '提醒日期已更新' })
+  }
+
+  async function handleReminderHourChange(hour) {
+    if (reminderSyncing) return
+    const nextConfig = { ...reminderConfig, hourOfDay: hour }
+    await syncReminderConfig(nextConfig, { successMessage: '提醒時間已更新' })
+  }
+
+  async function handleMessageBlur() {
+    if (reminderSyncing) return
+    const trimmed = messageDraft.trim()
+    if (!trimmed) {
+      showToast('提醒訊息不可為空', 'warning')
+      setMessageDraft(reminderConfig.message)
+      return
+    }
+    if (trimmed === reminderConfig.message) return
+
+    const nextConfig = { ...reminderConfig, message: trimmed }
+    const success = await syncReminderConfig(nextConfig, { successMessage: '提醒訊息已更新' })
+    if (!success) {
+      // 還原輸入框內容
+      setMessageDraft(reminderConfig.message)
+    }
+  }
+
+  async function handleAddExtraEmail() {
     if (!newExtraEmail) return
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newExtraEmail)) {
       showToast('Email 格式不正確', 'warning')
@@ -171,25 +194,31 @@ export default function MailManagement() {
       return
     }
 
-    // 檢查是否為系統上傳者 (僅在勾選自動通知上傳者時檢查)
-    if (reminderConfig.recipientTypeUploader && uploaderEmails.includes(emailLower)) {
+    if (uploaderEmails.includes(emailLower)) {
       showToast('此 Email 為系統上傳者，已包含在預設通知對象中', 'info')
       setNewExtraEmail('')
       return
     }
 
-    setReminderConfig(prev => ({
-      ...prev,
-      extraEmails: [...prev.extraEmails, newExtraEmail]
-    }))
-    setNewExtraEmail('')
+    const nextConfig = {
+      ...reminderConfig,
+      extraEmails: [...reminderConfig.extraEmails, newExtraEmail]
+    }
+
+    const success = await syncReminderConfig(nextConfig, { successMessage: '已新增額外通知 Email' })
+    if (success) {
+      setNewExtraEmail('')
+    }
   }
 
-  function removeExtraEmail(email) {
-    setReminderConfig(prev => ({
-      ...prev,
-      extraEmails: prev.extraEmails.filter(e => e !== email)
-    }))
+  async function handleRemoveExtraEmail(email) {
+    if (reminderSyncing) return
+    const nextConfig = {
+      ...reminderConfig,
+      extraEmails: reminderConfig.extraEmails.filter(e => e !== email)
+    }
+
+    await syncReminderConfig(nextConfig, { successMessage: '已移除額外通知 Email' })
   }
 
   async function loadMailRules() {
@@ -353,6 +382,7 @@ export default function MailManagement() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900">每月上傳提醒</h2>
               <p className="text-sm text-gray-500">設定定期發送 Email 提醒上傳者上傳影片清單</p>
+              <p className="text-xs text-gray-400 mt-1">啟用後所有變更會立即套用，無需手動儲存</p>
             </div>
           </div>
           
@@ -360,9 +390,10 @@ export default function MailManagement() {
             <button
               type="button"
               onClick={handleToggleReminder}
+              disabled={reminderSyncing}
               className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                 reminderConfig.enabled ? 'bg-primary-600' : 'bg-gray-200'
-              }`}
+              } ${reminderSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="sr-only">啟用提醒</span>
               <span
@@ -374,20 +405,14 @@ export default function MailManagement() {
             <span className={`text-sm font-medium ${reminderConfig.enabled ? 'text-primary-700' : 'text-gray-500'}`}>
               {reminderConfig.enabled ? '已啟用' : '已停用'}
             </span>
-            
-            <div className="w-px h-6 bg-gray-200 mx-2 hidden sm:block"></div>
-            <button
-              onClick={saveReminderSettings}
-              disabled={reminderSaving}
-              className="btn btn-primary flex items-center gap-2"
-            >
-              {reminderSaving ? (
-                <span className="spinner w-4 h-4 border-white"></span>
-              ) : (
-                <Save className="h-4 w-4" />
-              )}
-              儲存設定
-            </button>
+            {reminderSyncing ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="spinner w-4 h-4 border-gray-300"></span>
+                <span>同步中...</span>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400">變更會自動儲存</span>
+            )}
           </div>
         </div>
 
@@ -395,8 +420,8 @@ export default function MailManagement() {
           <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
             <div className="spinner"></div> 載入設定中...
           </div>
-        ) : (
-          <div className={`space-y-6 transition-all duration-300 ${reminderConfig.enabled ? '' : 'opacity-50 pointer-events-none filter grayscale'}`}>
+        ) : reminderConfig.enabled ? (
+          <div className="space-y-6 transition-all duration-300">
             {/* 時間設定 */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
@@ -408,8 +433,9 @@ export default function MailManagement() {
                     </div>
                     <select
                       value={reminderConfig.dayOfMonth}
-                      onChange={(e) => setReminderConfig(prev => ({ ...prev, dayOfMonth: parseInt(e.target.value) }))}
-                      className="pl-10 input w-full appearance-none"
+                      onChange={(e) => handleReminderDayChange(parseInt(e.target.value, 10))}
+                      disabled={reminderSyncing}
+                      className="pl-10 input w-full appearance-none disabled:cursor-not-allowed"
                     >
                       {Array.from({ length: 28 }, (_, i) => i + 1).map(day => (
                         <option key={day} value={day}>每月 {day} 號</option>
@@ -422,8 +448,9 @@ export default function MailManagement() {
                     </div>
                     <select
                       value={reminderConfig.hourOfDay}
-                      onChange={(e) => setReminderConfig(prev => ({ ...prev, hourOfDay: parseInt(e.target.value) }))}
-                      className="pl-10 input w-full appearance-none"
+                      onChange={(e) => handleReminderHourChange(parseInt(e.target.value, 10))}
+                      disabled={reminderSyncing}
+                      className="pl-10 input w-full appearance-none disabled:cursor-not-allowed"
                     >
                       {Array.from({ length: 24 }, (_, i) => i).map(hour => (
                         <option key={hour} value={hour}>{String(hour).padStart(2, '0')}:00</option>
@@ -437,9 +464,11 @@ export default function MailManagement() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">提醒訊息內容</label>
                 <input
                   type="text"
-                  value={reminderConfig.message}
-                  onChange={(e) => setReminderConfig(prev => ({ ...prev, message: e.target.value }))}
-                  className="input w-full"
+                  value={messageDraft}
+                  onChange={(e) => setMessageDraft(e.target.value)}
+                  onBlur={handleMessageBlur}
+                  disabled={reminderSyncing}
+                  className="input w-full disabled:cursor-not-allowed"
                   placeholder="例如：請記得上傳本月的影片清單"
                 />
               </div>
@@ -451,24 +480,17 @@ export default function MailManagement() {
               <div className="space-y-4">
                 {/* 預設通知對象（上傳者） */}
                 <div className="bg-white border border-dashed border-primary-200 rounded-xl px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex flex-col gap-1 mb-2">
                     <p className="text-sm font-medium text-gray-700 flex items-center gap-2">
                       <Info className="h-4 w-4 text-primary-600" />
                       預設通知對象（所有上傳者）
                     </p>
-                    <label className="inline-flex items-center cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={reminderConfig.recipientTypeUploader}
-                        onChange={(e) => setReminderConfig(prev => ({ ...prev, recipientTypeUploader: e.target.checked }))}
-                        className="sr-only peer"
-                      />
-                      <div className="relative w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary-600"></div>
-                      <span className="ml-2 text-xs text-gray-600">自動通知</span>
-                    </label>
+                    <p className="text-xs text-gray-500">
+                      啟用提醒後系統會自動通知所有上傳者，無須額外切換。
+                    </p>
                   </div>
                   
-                  <div className={`flex flex-wrap gap-2 transition-opacity ${reminderConfig.recipientTypeUploader ? '' : 'opacity-50'}`}>
+                  <div className="flex flex-wrap gap-2">
                     {availableUsers.filter(u => u.role === 'uploader').map((uploader) => (
                       <span
                         key={uploader.id}
@@ -493,8 +515,9 @@ export default function MailManagement() {
                         <span key={email} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-white border border-gray-200 text-gray-700 shadow-sm">
                           {email}
                           <button
-                            onClick={() => removeExtraEmail(email)}
+                            onClick={() => handleRemoveExtraEmail(email)}
                             className="ml-2 text-gray-400 hover:text-red-500 transition-colors"
+                            disabled={reminderSyncing}
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -509,6 +532,7 @@ export default function MailManagement() {
                       onChange={(e) => setNewExtraEmail(e.target.value)}
                       placeholder="輸入 Email 後按 Enter 或點擊新增"
                       className="input flex-1"
+                      disabled={reminderSyncing}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault()
@@ -519,6 +543,7 @@ export default function MailManagement() {
                     <button
                       type="button"
                       onClick={handleAddExtraEmail}
+                      disabled={reminderSyncing}
                       className="btn btn-secondary whitespace-nowrap"
                     >
                       <Plus className="h-4 w-4 mr-1" /> 新增
@@ -527,6 +552,11 @@ export default function MailManagement() {
                 </div>
               </div>
             </div>
+          </div>
+        ) : (
+          <div className="py-10 text-center text-gray-500">
+            <p>每月提醒目前為停用狀態。</p>
+            <p className="text-sm mt-1">啟用後即可設定提醒時間與通知對象。</p>
           </div>
         )}
       </section>
