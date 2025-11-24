@@ -7,11 +7,11 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Filter, Send } from 'lucide-react'
+import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Filter, Send, History, X } from 'lucide-react'
 import MovieCard from '../components/MovieCard'
 import Select from '../components/Select'
 import BrandTransition from '../components/BrandTransition'
-import { getLatestVideos, getAvailableMonths, submitSelection } from '../lib/api'
+import { getLatestVideos, getAvailableMonths, submitSelection, getPreviousSelection } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 
@@ -31,10 +31,19 @@ export default function MovieSelection() {
   
   const [viewMode, setViewMode] = useState('grid')
   
+  // 上月選擇相關
+  const [previousSelection, setPreviousSelection] = useState(null)
+  const [previousVideos, setPreviousVideos] = useState([])
+  const [previousVideoIds, setPreviousVideoIds] = useState([])
+  const [loadingPrevious, setLoadingPrevious] = useState(false)
+  
   // 分頁設定
   const PAGE_SIZE = 12 // Increased for grid layout
   const [currentPage, setCurrentPage] = useState(1)
   const [showAllPages, setShowAllPages] = useState(false)
+  
+  // 確認 Modal
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
   
   useEffect(() => {
     loadMonths()
@@ -46,15 +55,16 @@ export default function MovieSelection() {
     }
   }, [selectedMonth])
   
-  // 載入當月已選擇的影片
+  // 載入當月已選擇的影片與上月選擇
   useEffect(() => {
     if (batch && user) {
-      loadPreviousSelection()
+      loadCurrentAndPreviousSelection()
     }
   }, [batch, user])
   
-  async function loadPreviousSelection() {
+  async function loadCurrentAndPreviousSelection() {
     try {
+      // 載入當月已選擇的影片
       const { data, error } = await supabase
         .from('selections')
         .select('video_ids')
@@ -69,8 +79,45 @@ export default function MovieSelection() {
       if (data && data.video_ids) {
         setSelectedIds(data.video_ids)
       }
+      
+      // 載入上月選擇
+      await loadPreviousMonthSelection()
     } catch (error) {
-      console.error('載入之前的選擇失敗:', error)
+      console.error('載入選擇失敗:', error)
+    }
+  }
+  
+  async function loadPreviousMonthSelection() {
+    if (!batch || !batch.id) return
+    
+    try {
+      setLoadingPrevious(true)
+      const response = await getPreviousSelection(batch.id)
+      
+      if (response.success && response.data) {
+        const { previousSelection: prevSel, previousVideos: prevVids } = response.data
+        
+        if (prevSel && prevVids && prevVids.length > 0) {
+          setPreviousSelection(prevSel)
+          setPreviousVideos(prevVids)
+          setPreviousVideoIds(prevSel.video_ids || [])
+          
+          // 預選上月已選的影片（只預選在本月清單中仍存在的）
+          const currentVideoIds = videos.map(v => v.id)
+          const toPreselect = (prevSel.video_ids || []).filter(id => currentVideoIds.includes(id))
+          
+          setSelectedIds(prev => {
+            const combined = [...new Set([...prev, ...toPreselect])]
+            return combined
+          })
+          
+          console.log(`📋 載入上月選擇: ${prevVids.length} 部影片`)
+        }
+      }
+    } catch (error) {
+      console.error('載入上月選擇失敗:', error)
+    } finally {
+      setLoadingPrevious(false)
     }
   }
   
@@ -129,6 +176,11 @@ export default function MovieSelection() {
       setBatch(response.data.batch)
       setVideos(response.data.videos || [])
       
+      // 清空上月資料
+      setPreviousSelection(null)
+      setPreviousVideos([])
+      setPreviousVideoIds([])
+      
       setSelectedIds([])
       setCurrentPage(1)
       setShowAllPages(false)
@@ -152,11 +204,21 @@ export default function MovieSelection() {
     })
   }
   
+  function handleSubmitClick() {
+    // 若有上月選擇，先顯示確認 Modal
+    if (previousVideos.length > 0) {
+      setShowConfirmModal(true)
+    } else {
+      handleSubmit()
+    }
+  }
+  
   async function handleSubmit() {
     if (!batch) return
     
     try {
       setSubmitting(true)
+      setShowConfirmModal(false)
       
       await submitSelection({ 
         userId: user.id,
@@ -167,6 +229,10 @@ export default function MovieSelection() {
       })
       
       showToast('影片選擇已提交成功！', 'success')
+      
+      // 清空上月資料，因為已經送出新的選擇
+      setPreviousVideos([])
+      setPreviousVideoIds([])
     } catch (error) {
       console.error('提交選擇失敗:', error)
       showToast('提交失敗，請稍後再試', 'error')
@@ -189,9 +255,91 @@ export default function MovieSelection() {
   
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1)
 
+  // 計算差異
+  const currentVideoIds = videos.map(v => v.id)
+  const removedVideos = previousVideos.filter(v => !selectedIds.includes(v.id))
+  const addedVideos = videos.filter(v => selectedIds.includes(v.id) && !previousVideoIds.includes(v.id))
+  const keptVideos = previousVideos.filter(v => selectedIds.includes(v.id))
+
   return (
     <div className="space-y-8 pb-24">
       <BrandTransition isVisible={loading || loadingMonths} />
+      
+      {/* 上月選擇區塊 */}
+      {previousVideos.length > 0 && (
+        <div className="glass-panel rounded-2xl p-6 border-2 border-amber-200/50">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-amber-100 text-amber-700 p-2 rounded-lg">
+                <History className="h-5 w-5" />
+              </div>
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">上月已選片單</h3>
+                <p className="text-sm text-gray-500">共 {previousVideos.length} 部影片 · 您可以取消勾選來下架</p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {previousVideos.map((video) => {
+              const isStillSelected = selectedIds.includes(video.id)
+              const isInCurrentBatch = currentVideoIds.includes(video.id)
+              
+              return (
+                <div
+                  key={video.id}
+                  onClick={() => isInCurrentBatch && handleToggle(video.id)}
+                  className={`relative bg-white rounded-xl overflow-hidden transition-all duration-200 border-2 ${
+                    isStillSelected
+                      ? 'border-amber-400 shadow-md'
+                      : 'border-gray-200 opacity-60'
+                  } ${isInCurrentBatch ? 'cursor-pointer hover:shadow-lg' : 'cursor-not-allowed'}`}
+                >
+                  <div className="aspect-[2/3] bg-gray-100 overflow-hidden relative">
+                    {video.thumbnail_url ? (
+                      <img src={video.thumbnail_url} alt={video.title} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-gray-300">
+                        <Film className="h-8 w-8" />
+                      </div>
+                    )}
+                    
+                    {isStillSelected && (
+                      <div className="absolute inset-0 bg-amber-500/10 backdrop-blur-[1px] flex items-center justify-center">
+                        <div className="bg-amber-500 text-white rounded-full p-1.5">
+                          <CheckCircle className="h-5 w-5" />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!isStillSelected && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <div className="bg-red-500 text-white rounded-full p-1.5">
+                          <X className="h-5 w-5" />
+                        </div>
+                      </div>
+                    )}
+                    
+                    {!isInCurrentBatch && (
+                      <div className="absolute top-2 right-2 bg-gray-800 text-white text-xs px-2 py-1 rounded">
+                        已無法選
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="p-2">
+                    <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{video.title}</h4>
+                    {video.title_en && (
+                      <p className="text-xs text-gray-500 line-clamp-1">{video.title_en}</p>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+      
       {/* 頂部控制列 - Glass Panel */}
       <div className="sticky top-24 z-30 glass-panel rounded-2xl p-4 mb-8 transition-all duration-300">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -377,7 +525,7 @@ export default function MovieSelection() {
                 清除全部
               </button>
               <button
-                onClick={handleSubmit}
+                onClick={handleSubmitClick}
                 disabled={submitting || selectedIds.length === 0}
                 className="btn-primary flex-1 sm:flex-none w-full sm:w-auto px-8 py-3 text-base shadow-lg shadow-primary-500/25"
               >
@@ -393,6 +541,168 @@ export default function MovieSelection() {
                   </div>
                 )}
               </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+      
+      {/* 確認 Modal */}
+      {showConfirmModal && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
+          {/* Backdrop */}
+          <div 
+            className="fixed inset-0 bg-black/25 backdrop-blur-sm transition-opacity animate-fade-in" 
+            onClick={() => setShowConfirmModal(false)}
+            aria-hidden="true"
+          />
+
+          {/* Modal Panel */}
+          <div 
+            className="relative w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all border border-gray-100 animate-fade-in max-h-[90vh] overflow-y-auto"
+            role="dialog"
+            aria-modal="true"
+          >
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-xl font-bold leading-6 text-gray-900">
+                  確認影片選擇異動
+                </h3>
+                <button
+                  type="button"
+                  className="text-gray-400 hover:text-gray-500 transition-colors focus:outline-none p-1 rounded-full hover:bg-gray-100"
+                  onClick={() => setShowConfirmModal(false)}
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              
+              {/* 異動摘要 */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-5 w-5 text-amber-600" />
+                  <h4 className="font-semibold text-amber-900">異動摘要</h4>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-700">{previousVideos.length}</div>
+                    <div className="text-xs text-gray-500">上月總數</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-gray-700">{selectedIds.length}</div>
+                    <div className="text-xs text-gray-500">本月總數</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-red-600">{removedVideos.length}</div>
+                    <div className="text-xs text-gray-500">將下架</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-green-600">{addedVideos.length}</div>
+                    <div className="text-xs text-gray-500">新增</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 將下架的影片 */}
+              {removedVideos.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    將下架的影片 ({removedVideos.length} 部)
+                  </h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {removedVideos.map((video) => (
+                      <div key={video.id} className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                          {video.thumbnail_url ? (
+                            <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <Film className="m-auto h-6 w-6 text-gray-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm text-gray-900">{video.title}</div>
+                          {video.title_en && (
+                            <div className="text-xs text-gray-500">{video.title_en}</div>
+                          )}
+                        </div>
+                        <X className="h-5 w-5 text-red-500 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* 新增的影片 */}
+              {addedVideos.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    新增的影片 ({addedVideos.length} 部)
+                  </h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {addedVideos.map((video) => (
+                      <div key={video.id} className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                          {video.thumbnail_url ? (
+                            <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <Film className="m-auto h-6 w-6 text-gray-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm text-gray-900">{video.title}</div>
+                          {video.title_en && (
+                            <div className="text-xs text-gray-500">{video.title_en}</div>
+                          )}
+                        </div>
+                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* 保留的影片 */}
+              {keptVideos.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                    保留的影片 ({keptVideos.length} 部)
+                  </h4>
+                  <div className="text-sm text-gray-600">
+                    這些影片將繼續保留在您的選擇清單中
+                  </div>
+                </div>
+              )}
+              
+              {/* 按鈕 */}
+              <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  className="btn-ghost px-6 py-2"
+                  disabled={submitting}
+                >
+                  返回修改
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                  className="btn-primary px-6 py-2 flex items-center gap-2"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader className="h-4 w-4 animate-spin" />
+                      處理中...
+                    </>
+                  ) : (
+                    <>
+                      確認送出
+                      <Send className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>,

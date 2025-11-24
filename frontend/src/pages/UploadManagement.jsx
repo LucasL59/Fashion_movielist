@@ -66,10 +66,43 @@ export default function UploadManagement() {
     if (selectedFile) {
       setFile(selectedFile)
 
+      // 如果使用者還沒有輸入批次名稱，嘗試從檔名提取月份
       if (!batchName) {
-        const now = new Date()
-        const defaultName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')} 影片清單`
-        setBatchName(defaultName)
+        let suggestedName = ''
+        const fileName = selectedFile.name
+        
+        // 嘗試從檔名提取月份資訊
+        const monthPatterns = [
+          /(\d{4})[年\-]?(\d{1,2})月?/,  // 2024年11月, 2024-11, 202411
+          /(\d{1,2})月/,                  // 11月, 10月
+        ]
+        
+        const currentYear = new Date().getFullYear()
+        let extractedMonth = null
+        
+        for (const pattern of monthPatterns) {
+          const match = fileName.match(pattern)
+          if (match) {
+            if (match[2]) {
+              // 有年份和月份
+              extractedMonth = `${match[1]}-${String(match[2]).padStart(2, '0')}`
+            } else {
+              // 只有月份，使用當前年份
+              extractedMonth = `${currentYear}-${String(match[1]).padStart(2, '0')}`
+            }
+            break
+          }
+        }
+        
+        // 如果成功提取月份，使用提取的月份；否則使用當前月份
+        if (extractedMonth) {
+          suggestedName = `${extractedMonth} 影片清單`
+        } else {
+          const now = new Date()
+          suggestedName = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')} 影片清單`
+        }
+        
+        setBatchName(suggestedName)
       }
     }
   }
@@ -157,7 +190,7 @@ export default function UploadManagement() {
         <div className="space-y-4">
           <div>
             <label htmlFor="batch-name" className="block text-sm font-medium text-gray-700 mb-2">
-              批次名稱
+              批次名稱 <span className="text-amber-600">*</span>
             </label>
             <input
               id="batch-name"
@@ -165,8 +198,11 @@ export default function UploadManagement() {
               value={batchName}
               onChange={(e) => setBatchName(e.target.value)}
               className="input"
-              placeholder="例如：2025-01 影片清單"
+              placeholder="例如：10月清單、2024-10 影片清單"
             />
+            <p className="text-xs text-amber-600 mt-1.5">
+              💡 提示：系統會自動從批次名稱或檔名中識別月份（如「10月」或「2024-10」）
+            </p>
           </div>
 
           <div>

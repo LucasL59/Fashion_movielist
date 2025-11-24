@@ -101,13 +101,63 @@ router.post('/', requireAuth, async (req, res) => {
       .select('*')
       .in('id', videoIds);
     
-    // 發送通知給管理員
+    // 獲取當前批次資訊以計算上月差異
+    const { data: currentBatch } = await supabase
+      .from('batches')
+      .select('month')
+      .eq('id', batchId)
+      .single();
+    
+    let previousVideos = [];
+    let previousVideoIds = [];
+    
+    if (currentBatch && currentBatch.month) {
+      // 計算上一個月份
+      const [year, month] = currentBatch.month.split('-').map(Number);
+      const prevDate = new Date(year, month - 2, 1);
+      const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      // 查找上月批次
+      const { data: previousBatches } = await supabase
+        .from('batches')
+        .select('id')
+        .eq('month', prevMonth)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (previousBatches && previousBatches.length > 0) {
+        // 查找用戶上月選擇
+        const { data: previousSelection } = await supabase
+          .from('selections')
+          .select('video_ids')
+          .eq('user_id', userId)
+          .eq('batch_id', previousBatches[0].id)
+          .maybeSingle();
+        
+        if (previousSelection && previousSelection.video_ids) {
+          previousVideoIds = previousSelection.video_ids;
+          
+          // 獲取上月影片詳情
+          const { data: prevVids } = await supabase
+            .from('videos')
+            .select('*')
+            .in('id', previousVideoIds);
+          
+          previousVideos = prevVids || [];
+        }
+      }
+    }
+    
+    // 發送通知給管理員（包含差異資訊）
     try {
       await notifyAdminCustomerSelection({
         customerName: finalCustomerName || userId,
         customerEmail: finalCustomerEmail || 'unknown@example.com',
         batchId,
-        videos: selectedVideos || []
+        videos: selectedVideos || [],
+        previousVideos: previousVideos,
+        previousVideoIds: previousVideoIds
       });
       console.log('📧 已發送通知給管理員');
     } catch (emailError) {
@@ -205,6 +255,139 @@ router.get('/batch/:batchId', async (req, res) => {
     res.status(500).json({ 
       error: 'Internal Server Error',
       message: error.message || '查詢批次選擇失敗'
+    });
+  }
+});
+
+/**
+ * GET /api/selections/previous/:currentBatchId
+ * 
+ * 獲取用戶在上一個月批次的選擇
+ * 根據當前批次的月份，找出上一個月的批次與該用戶的選擇
+ */
+router.get('/previous/:currentBatchId', requireAuth, async (req, res) => {
+  try {
+    const { currentBatchId } = req.params;
+    const authProfile = req.authUserProfile;
+    const authUser = req.authUser;
+    const userId = authProfile?.id || authUser?.id;
+    
+    if (!userId) {
+      return res.status(401).json({ 
+        error: 'Unauthorized',
+        message: '請先登入' 
+      });
+    }
+    
+    // 獲取當前批次的月份
+    const { data: currentBatch, error: batchError } = await supabase
+      .from('batches')
+      .select('month')
+      .eq('id', currentBatchId)
+      .single();
+    
+    if (batchError) {
+      if (batchError.code === 'PGRST116') {
+        return res.json({
+          success: true,
+          data: {
+            previousBatch: null,
+            previousSelection: null,
+            previousVideos: []
+          }
+        });
+      }
+      throw batchError;
+    }
+    
+    if (!currentBatch || !currentBatch.month) {
+      return res.json({
+        success: true,
+        data: {
+          previousBatch: null,
+          previousSelection: null,
+          previousVideos: []
+        }
+      });
+    }
+    
+    // 計算上一個月份 (YYYY-MM 格式)
+    const [year, month] = currentBatch.month.split('-').map(Number);
+    const prevDate = new Date(year, month - 2, 1); // month - 2 因為 JS Date 月份從 0 開始
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    console.log(`🔍 查找上月批次: 當前=${currentBatch.month}, 上月=${prevMonth}`);
+    
+    // 查找上一個月的批次
+    const { data: previousBatches, error: prevBatchError } = await supabase
+      .from('batches')
+      .select('*')
+      .eq('month', prevMonth)
+      .eq('status', 'active')
+      .order('created_at', { ascending: false });
+    
+    if (prevBatchError) throw prevBatchError;
+    
+    if (!previousBatches || previousBatches.length === 0) {
+      console.log('📭 未找到上月批次');
+      return res.json({
+        success: true,
+        data: {
+          previousBatch: null,
+          previousSelection: null,
+          previousVideos: []
+        }
+      });
+    }
+    
+    const previousBatch = previousBatches[0];
+    
+    // 查找用戶在上一個月批次的選擇
+    const { data: previousSelection, error: selectionError } = await supabase
+      .from('selections')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('batch_id', previousBatch.id)
+      .maybeSingle();
+    
+    if (selectionError) throw selectionError;
+    
+    if (!previousSelection || !previousSelection.video_ids || previousSelection.video_ids.length === 0) {
+      console.log('📭 用戶在上月未選擇任何影片');
+      return res.json({
+        success: true,
+        data: {
+          previousBatch: previousBatch,
+          previousSelection: null,
+          previousVideos: []
+        }
+      });
+    }
+    
+    // 獲取上月選擇的影片詳細資訊
+    const { data: previousVideos, error: videosError } = await supabase
+      .from('videos')
+      .select('*')
+      .in('id', previousSelection.video_ids);
+    
+    if (videosError) throw videosError;
+    
+    console.log(`✅ 找到上月選擇: ${previousVideos?.length || 0} 部影片`);
+    
+    res.json({
+      success: true,
+      data: {
+        previousBatch: previousBatch,
+        previousSelection: previousSelection,
+        previousVideos: previousVideos || []
+      }
+    });
+    
+  } catch (error) {
+    console.error('查詢上月選擇錯誤:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: error.message || '查詢上月選擇失敗'
     });
   }
 });

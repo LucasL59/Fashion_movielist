@@ -183,6 +183,14 @@ export async function getUserSelections(userId) {
 }
 
 /**
+ * 獲取用戶在上一個月批次的選擇
+ */
+export async function getPreviousSelection(currentBatchId) {
+  const response = await api.get(`/api/selections/previous/${currentBatchId}`)
+  return response.data
+}
+
+/**
  * 郵件規則相關 API
  */
 export async function getMailRules(params = {}) {

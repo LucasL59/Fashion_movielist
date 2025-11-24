@@ -60,7 +60,11 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ error: 'Bad Request', message })
     }
 
-    await sendWelcomeEmail({ to: email, name })
+    try {
+      await sendWelcomeEmail({ to: email, name })
+    } catch (emailError) {
+      console.warn('歡迎信寄送失敗，將略過此步驟:', emailError.message)
+    }
 
     await recordOperationLog({
       actor: {
@@ -77,7 +81,11 @@ router.post('/register', async (req, res) => {
     return res.json({ success: true, userId: data.user?.id })
   } catch (error) {
     console.error('註冊失敗:', error)
-    return res.status(500).json({ error: 'Internal Server Error', message: '建立帳號失敗，請稍後再試' })
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: '建立帳號失敗，請稍後再試',
+      detail: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    })
   }
 })
 

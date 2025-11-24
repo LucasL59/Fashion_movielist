@@ -149,6 +149,41 @@ async function getStaffRecipients(excludeIds = []) {
   }
 }
 
+async function getAdminRecipients(excludeIds = []) {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, name')
+      .eq('role', 'admin');
+
+    if (error) throw error;
+
+    const admins = (data || [])
+      .filter((profile) => profile.email)
+      .filter((profile) => !excludeIds.includes(profile.id))
+      .map((profile) => profile.email);
+
+    if (admins.length > 0) {
+      return admins;
+    }
+
+    return process.env.ADMIN_EMAIL
+      ? process.env.ADMIN_EMAIL
+          .split(',')
+          .map((email) => email.trim())
+          .filter(Boolean)
+      : [];
+  } catch (error) {
+    console.error('取得管理員收件人失敗，將回退至環境變數:', error);
+    return process.env.ADMIN_EMAIL
+      ? process.env.ADMIN_EMAIL
+          .split(',')
+          .map((email) => email.trim())
+          .filter(Boolean)
+      : [];
+  }
+}
+
 function mergeRecipients(...lists) {
   const emails = new Map();
   lists.flat().forEach((recipient) => {
@@ -314,11 +349,11 @@ export async function notifyCustomersNewList(batchId, batchName) {
  * @param {string} options.customerEmail - 客戶 Email
  * @param {string} options.batchId - 批次 ID
  * @param {Array} options.videos - 選擇的影片陣列
+ * @param {Array} options.previousVideos - 上月選擇的影片陣列（選填）
+ * @param {Array} options.previousVideoIds - 上月選擇的影片 ID 陣列（選填）
  */
-export async function notifyAdminCustomerSelection({ customerName, customerEmail, batchId, videos }) {
+export async function notifyAdminCustomerSelection({ customerName, customerEmail, batchId, videos, previousVideos = [], previousVideoIds = [] }) {
   try {
-    const adminEmail = process.env.ADMIN_EMAIL;
-    
     // 查詢批次資訊
     const { data: batch } = await supabase
       .from('batches')
@@ -328,8 +363,10 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
 
     const uploaderProfile = await getUploaderByBatch(batch);
 
+    const uploaderIdToExclude = uploaderProfile?.id ? [uploaderProfile.id] : []
+    const adminRecipients = await getAdminRecipients(uploaderIdToExclude)
     const recipients = mergeRecipients(
-      adminEmail ? [adminEmail] : [],
+      adminRecipients,
       uploaderProfile?.email,
       await getMailRecipientsByEvent(MAIL_EVENT_TYPES.SELECTION_SUBMITTED)
     );
@@ -339,12 +376,22 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       return;
     }
     
-    // 建立影片清單 HTML - 質感優化版 (無圖片)
-    const videoListHtml = videos.map((video, index) => `
+    // 計算差異
+    const currentVideoIds = videos.map(v => v.id);
+    const removedVideos = previousVideos.filter(v => !currentVideoIds.includes(v.id));
+    const addedVideos = videos.filter(v => !previousVideoIds.includes(v.id));
+    const keptVideos = videos.filter(v => previousVideoIds.includes(v.id));
+    
+    // 建立本月選擇清單 HTML
+    const videoListHtml = videos.map((video, index) => {
+      const isNew = !previousVideoIds.includes(video.id);
+      const badge = isNew ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">新增</span>' : '';
+      
+      return `
       <tr style="border-bottom: 1px solid #eee;">
         <td style="padding: 16px 12px; color: #999; font-size: 14px;">${String(index + 1).padStart(2, '0')}</td>
         <td style="padding: 16px 12px;">
-          <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">${video.title}</div>
+          <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">${video.title}${badge}</div>
           <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
         </td>
         <td style="padding: 16px 12px; color: #666; font-size: 14px; white-space: nowrap;">
@@ -356,7 +403,84 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
           </span>
         </td>
       </tr>
-    `).join('');
+    `;
+    }).join('');
+    
+    // 建立上月選擇清單 HTML（若有）
+    let previousSectionHtml = '';
+    if (previousVideos.length > 0) {
+      const previousListHtml = previousVideos.map((video, index) => {
+        const isRemoved = !currentVideoIds.includes(video.id);
+        const statusBadge = isRemoved 
+          ? '<span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">已下架</span>'
+          : '<span style="background: #6b7280; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">保留</span>';
+        
+        return `
+        <tr style="border-bottom: 1px solid #eee; ${isRemoved ? 'opacity: 0.6;' : ''}">
+          <td style="padding: 12px; color: #999; font-size: 13px;">${String(index + 1).padStart(2, '0')}</td>
+          <td style="padding: 12px;">
+            <div style="font-weight: 600; font-size: 14px; color: #333; margin-bottom: 2px;">${video.title}${statusBadge}</div>
+            <div style="font-size: 12px; color: #888;">${video.title_en || ''}</div>
+          </td>
+          <td style="padding: 12px; color: #666; font-size: 13px; white-space: nowrap;">
+            ${video.duration ? `${video.duration} 分鐘` : '-'}
+          </td>
+        </tr>
+      `;
+      }).join('');
+      
+      previousSectionHtml = `
+        <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #f0f0f0;">
+          <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
+            上月選擇清單（共 ${previousVideos.length} 部）
+          </div>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;" width="40">#</th>
+                <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;">影片資訊</th>
+                <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;" width="80">片長</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${previousListHtml}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    // 建立差異摘要 HTML
+    let diffSummaryHtml = '';
+    if (previousVideos.length > 0) {
+      diffSummaryHtml = `
+        <div style="background: #fef3c7; border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #fde68a;">
+          <div style="font-weight: 700; font-size: 15px; color: #92400e; margin-bottom: 12px;">📊 異動摘要</div>
+          <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 120px;">
+              <div style="font-size: 12px; color: #92400e; margin-bottom: 4px;">上月總數</div>
+              <div style="font-size: 24px; font-weight: 700; color: #78350f;">${previousVideos.length}</div>
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <div style="font-size: 12px; color: #92400e; margin-bottom: 4px;">本月總數</div>
+              <div style="font-size: 24px; font-weight: 700; color: #78350f;">${videos.length}</div>
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <div style="font-size: 12px; color: #dc2626; margin-bottom: 4px;">已下架</div>
+              <div style="font-size: 24px; font-weight: 700; color: #dc2626;">${removedVideos.length}</div>
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <div style="font-size: 12px; color: #10b981; margin-bottom: 4px;">新增</div>
+              <div style="font-size: 24px; font-weight: 700; color: #10b981;">${addedVideos.length}</div>
+            </div>
+            <div style="flex: 1; min-width: 120px;">
+              <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">保留</div>
+              <div style="font-size: 24px; font-weight: 700; color: #6b7280;">${keptVideos.length}</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
     
     const emailBody = `
       <!DOCTYPE html>
@@ -413,7 +537,9 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
               </div>
             </div>
             
-            <div class="section-title">已選影片清單</div>
+            ${diffSummaryHtml}
+            
+            <div class="section-title">本月選擇清單</div>
             
             <table>
               <thead>
@@ -428,6 +554,8 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
                 ${videoListHtml}
               </tbody>
             </table>
+            
+            ${previousSectionHtml}
             
             <p style="margin-top: 32px; font-size: 14px; color: #666; line-height: 1.6;">
               ※ 本郵件為系統自動發送，請依照此清單協助客戶進行後續影片安排。如需與客戶聯繫，請直接回覆此郵件。

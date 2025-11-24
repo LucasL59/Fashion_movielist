@@ -43,45 +43,54 @@ router.post('/', requireAuth, requireRoles(['admin', 'uploader']), async (req, r
     // 獲取上傳者資訊（從請求中）
     const uploaderId = req.authUser?.id || req.body.userId || null;
     
-    // 從檔案名稱提取月份（例如: "UIP片單金隆11月.xlsx" -> "2024-11"）
+    // 從檔案名稱和批次名稱提取月份
     const fileName = file.name;
+    const userBatchName = req.body.batchName || '';
     let extractedMonth = null;
     
-    // 嘗試從檔案名稱提取月份
-    // 支援格式: "XX月", "11月", "2024-11", "202411" 等
-    const monthPatterns = [
-      /(\d{4})[年\-]?(\d{1,2})月?/,  // 2024年11月, 2024-11, 202411
-      /(\d{1,2})月/,                  // 11月
-    ];
-    
-    const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-    
-    for (const pattern of monthPatterns) {
-      const match = fileName.match(pattern);
-      if (match) {
-        if (match[2]) {
-          // 有年份和月份
-          const year = match[1];
-          const month = String(match[2]).padStart(2, '0');
-          extractedMonth = `${year}-${month}`;
-        } else {
-          // 只有月份，使用當前年份
-          const month = String(match[1]).padStart(2, '0');
-          extractedMonth = `${currentYear}-${month}`;
+    // 嘗試提取月份的函數
+    function extractMonthFromText(text) {
+      // 支援格式: "2024年11月", "2024-11", "202411", "11月", "10月" 等
+      const monthPatterns = [
+        /(\d{4})[年\-]?(\d{1,2})月?/,  // 2024年11月, 2024-11, 202411
+        /(\d{1,2})月/,                  // 11月, 10月
+      ];
+      
+      const currentYear = new Date().getFullYear();
+      
+      for (const pattern of monthPatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          if (match[2]) {
+            // 有年份和月份
+            const year = match[1];
+            const month = String(match[2]).padStart(2, '0');
+            return `${year}-${month}`;
+          } else {
+            // 只有月份，使用當前年份
+            const month = String(match[1]).padStart(2, '0');
+            return `${currentYear}-${month}`;
+          }
         }
-        break;
       }
+      return null;
     }
+    
+    // 優先順序：1. 使用者輸入的批次名稱 > 2. 檔案名稱 > 3. 當前月份
+    extractedMonth = extractMonthFromText(userBatchName) || extractMonthFromText(fileName);
     
     // 如果無法提取月份，使用當前月份
     if (!extractedMonth) {
+      const currentYear = new Date().getFullYear();
+      const currentMonth = new Date().getMonth() + 1;
       extractedMonth = `${currentYear}-${String(currentMonth).padStart(2, '0')}`;
+      console.log(`⚠️  無法從檔名或批次名稱提取月份，使用當前月份: ${extractedMonth}`);
     }
     
-    const batchName = req.body.batchName || `${extractedMonth} 影片清單`;
+    const batchName = userBatchName || `${extractedMonth} 影片清單`;
     
     console.log(`📤 開始處理上傳: ${file.name}`);
+    console.log(`📝 批次名稱: ${batchName}`);
     console.log(`📅 識別月份: ${extractedMonth}`);
     
     // 解析 Excel 並上傳到 Supabase
