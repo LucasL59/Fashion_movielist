@@ -7,12 +7,15 @@
 import { useState, useEffect } from 'react'
 import { AlertCircle, BarChart3, Clock, RefreshCw, Upload, CheckCircle2, Clock3 } from 'lucide-react'
 import { getAdminDashboardOverview } from '../lib/api'
+import Select from '../components/Select'
 
 export default function AdminDashboard() {
   const [overviewLoading, setOverviewLoading] = useState(true)
   const [overviewError, setOverviewError] = useState('')
+  const [selectedBatchId, setSelectedBatchId] = useState('')
   const [overview, setOverview] = useState({
     latestBatch: null,
+    allBatches: [],
     uploader: null,
     totalCustomers: 0,
     submittedCount: 0,
@@ -24,12 +27,18 @@ export default function AdminDashboard() {
     loadDashboardOverview()
   }, [])
   
-  async function loadDashboardOverview() {
+  async function loadDashboardOverview(batchId = null) {
     try {
       setOverviewLoading(true)
       setOverviewError('')
-      const response = await getAdminDashboardOverview()
-      setOverview(response.data || {})
+      const response = await getAdminDashboardOverview(batchId || selectedBatchId)
+      const data = response.data || {}
+      setOverview(data)
+      
+      // 如果沒有選定批次且載入資料中有當前批次，則設定為當前批次
+      if (!selectedBatchId && !batchId && data.latestBatch) {
+        setSelectedBatchId(data.latestBatch.id)
+      }
     } catch (error) {
       console.error('載入概況失敗:', error)
       setOverviewError('無法取得儀表板概況，請稍後再試')
@@ -38,7 +47,14 @@ export default function AdminDashboard() {
     }
   }
   
+  function handleBatchChange(e) {
+    const newBatchId = e.target.value
+    setSelectedBatchId(newBatchId)
+    loadDashboardOverview(newBatchId)
+  }
+  
   const latestBatch = overview?.latestBatch
+  const allBatches = overview?.allBatches || []
   const totalCustomers = overview?.totalCustomers || 0
   const submittedCount = overview?.submittedCount || 0
   const pendingCount = overview?.pendingCount ?? Math.max(totalCustomers - submittedCount, 0)
@@ -138,33 +154,51 @@ export default function AdminDashboard() {
 
       {/* 選擇進度明細 */}
       <div className="card">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">客戶選擇明細</h2>
             <p className="text-sm text-gray-500">即時掌握誰已完成、誰尚未提交</p>
           </div>
-          <div className="grid grid-cols-3 gap-2 w-full md:w-auto">
-            {[
-              { value: 'all', label: '全部', count: selectionDetails.length },
-              { value: 'submitted', label: '已完成', count: submittedCount },
-              { value: 'pending', label: '待提交', count: pendingCount },
-            ].map((filter) => (
-              <button
-                key={filter.value}
-                type="button"
-                onClick={() => setStatusFilter(filter.value)}
-                className={`px-2 py-2 rounded-xl border text-sm font-medium transition-all flex flex-col items-center justify-center gap-1 md:flex-row md:px-4 md:rounded-full ${
-                  statusFilter === filter.value
-                    ? 'bg-primary-600 text-white border-primary-600 shadow-md'
-                    : 'border-gray-200 text-gray-600 hover:border-primary-200 hover:text-primary-600 bg-white'
-                }`}
-              >
-                <span>{filter.label}</span>
-                <span className={`text-xs ${statusFilter === filter.value ? 'text-primary-100' : 'text-gray-400'}`}>
-                  ({filter.count})
-                </span>
-              </button>
-            ))}
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+            {allBatches.length > 0 && (
+              <div className="w-full sm:w-48">
+                <Select
+                  value={selectedBatchId}
+                  onChange={handleBatchChange}
+                  options={allBatches.map((batch) => ({
+                    value: batch.id,
+                    label: `${batch.name} ${batch.status === 'active' ? '(當前)' : ''}`
+                  }))}
+                  placeholder="選擇批次"
+                  disabled={overviewLoading}
+                />
+              </div>
+            )}
+
+            <div className="flex bg-gray-50 p-1 rounded-lg border border-gray-200">
+              {[
+                { value: 'all', label: '全部', count: selectionDetails.length },
+                { value: 'submitted', label: '已完成', count: submittedCount },
+                { value: 'pending', label: '待提交', count: pendingCount },
+              ].map((filter) => (
+                <button
+                  key={filter.value}
+                  type="button"
+                  onClick={() => setStatusFilter(filter.value)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all whitespace-nowrap flex items-center gap-2 ${
+                    statusFilter === filter.value
+                      ? 'bg-white text-primary-700 shadow-sm ring-1 ring-gray-200'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  <span>{filter.label}</span>
+                  <span className={`text-xs ${statusFilter === filter.value ? 'bg-primary-100 text-primary-700' : 'bg-gray-200 text-gray-600'} px-1.5 py-0.5 rounded-full`}>
+                    {filter.count}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 

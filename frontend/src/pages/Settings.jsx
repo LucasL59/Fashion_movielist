@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { User, Mail, Bell, CheckCircle, AlertCircle, ShieldCheck, ScrollText } from 'lucide-react'
-import { setReminderSchedule, sendReminderNow, changePassword, getOperationLogRetentionSetting, updateOperationLogRetention } from '../lib/api'
+import { User, Mail, CheckCircle, AlertCircle, ShieldCheck, ScrollText } from 'lucide-react'
+import { changePassword, getOperationLogRetentionSetting, updateOperationLogRetention } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
-import Select from '../components/Select'
 
 export default function Settings() {
   const { user, updateProfile } = useAuth()
@@ -13,15 +12,6 @@ export default function Settings() {
   const [updateError, setUpdateError] = useState('')
   const { showToast } = useToast()
   
-  // 提醒設定
-  const [reminderDay, setReminderDay] = useState('1')
-  const [reminderHour, setReminderHour] = useState('9')
-  const [reminderMessage, setReminderMessage] = useState('請記得上傳本月的影片清單')
-  const [reminderEmail, setReminderEmail] = useState(user?.email || '')
-  const [settingReminder, setSettingReminder] = useState(false)
-  const [reminderSuccess, setReminderSuccess] = useState(false)
-  const [reminderError, setReminderError] = useState('')
-
   // 操作紀錄保留設定（僅管理員）
   const [logRetentionDayInput, setLogRetentionDayInput] = useState('90')
   const [logRetentionLoading, setLogRetentionLoading] = useState(false)
@@ -127,46 +117,6 @@ export default function Settings() {
     }
   }
   
-  async function handleSetReminder(e) {
-    e.preventDefault()
-    
-    // 建立 cron 表達式：分 時 日 月 週
-    const cronSchedule = `0 ${reminderHour} ${reminderDay} * *`
-    
-    try {
-      setSettingReminder(true)
-      setReminderError('')
-      await setReminderSchedule({
-        cronSchedule,
-        message: reminderMessage,
-        targetEmail: reminderEmail,
-      })
-      setReminderSuccess(true)
-      
-      setTimeout(() => {
-        setReminderSuccess(false)
-      }, 3000)
-    } catch (error) {
-      console.error('設定提醒失敗:', error)
-      setReminderError('設定提醒失敗，請稍後再試')
-    } finally {
-      setSettingReminder(false)
-    }
-  }
-  
-  async function handleTestReminder() {
-    try {
-      await sendReminderNow({
-        message: reminderMessage,
-        targetEmail: reminderEmail,
-      })
-      alert('測試提醒已發送！請檢查您的 Email。')
-    } catch (error) {
-      console.error('發送測試提醒失敗:', error)
-      alert('發送測試提醒失敗')
-    }
-  }
-
   async function handleSaveLogRetention(e) {
     e.preventDefault()
     const parsedDays = parseInt(logRetentionDayInput, 10)
@@ -270,7 +220,10 @@ export default function Settings() {
             </label>
             <input
               type="text"
-              value={user?.role === 'admin' ? '管理員' : '客戶'}
+              value={
+                user?.role === 'admin' ? '管理員' : 
+                user?.role === 'uploader' ? '上傳者' : '客戶'
+              }
               className="input bg-gray-50"
               disabled
             />
@@ -353,110 +306,7 @@ export default function Settings() {
         </form>
       </div>
 
-      {/* 提醒設定（僅管理員可見，uploader 不可見） */}
-      {user?.role === 'admin' && (
-        <div className="card">
-          <div className="flex items-center gap-3 mb-6">
-            <Bell className="h-6 w-6 text-primary-600" />
-            <h2 className="text-xl font-bold text-gray-900">提醒通知設定</h2>
-          </div>
-
-          {reminderSuccess && (
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3 mb-6">
-              <CheckCircle className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-green-800">提醒設定已更新</p>
-            </div>
-          )}
-          
-          {reminderError && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3 mb-6">
-              <AlertCircle className="h-5 w-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{reminderError}</p>
-            </div>
-          )}
-          
-          <form onSubmit={handleSetReminder} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="reminder-day" className="block text-sm font-medium text-gray-700 mb-2">
-                  每月幾號
-                </label>
-                <Select
-                  value={reminderDay}
-                  onChange={(e) => setReminderDay(e.target.value)}
-                  options={Array.from({ length: 28 }, (_, i) => i + 1).map((day) => ({
-                    value: day.toString(),
-                    label: `${day} 號`
-                  }))}
-                  placeholder="選擇日期"
-                />
-              </div>
-              
-              <div>
-                <label htmlFor="reminder-hour" className="block text-sm font-medium text-gray-700 mb-2">
-                  幾點
-                </label>
-                <Select
-                  value={reminderHour}
-                  onChange={(e) => setReminderHour(e.target.value)}
-                  options={Array.from({ length: 24 }, (_, i) => i).map((hour) => ({
-                    value: hour.toString(),
-                    label: `${hour}:00`
-                  }))}
-                  placeholder="選擇時間"
-                />
-              </div>
-            </div>
-            
-            <div>
-              <label htmlFor="reminder-message" className="block text-sm font-medium text-gray-700 mb-2">
-                提醒訊息
-              </label>
-              <textarea
-                id="reminder-message"
-                value={reminderMessage}
-                onChange={(e) => setReminderMessage(e.target.value)}
-                className="input"
-                rows={3}
-                placeholder="提醒內容"
-              />
-            </div>
-            
-            <div>
-              <label htmlFor="reminder-email" className="block text-sm font-medium text-gray-700 mb-2">
-                接收 Email
-              </label>
-              <input
-                id="reminder-email"
-                type="email"
-                value={reminderEmail}
-                onChange={(e) => setReminderEmail(e.target.value)}
-                className="input"
-                placeholder="接收提醒的 Email"
-              />
-            </div>
-            
-            <div className="flex gap-3">
-              <button
-                type="submit"
-                disabled={settingReminder}
-                className="btn btn-primary"
-              >
-                {settingReminder ? '設定中...' : '儲存設定'}
-              </button>
-              
-              <button
-                type="button"
-                onClick={handleTestReminder}
-                className="btn btn-outline"
-              >
-                發送測試提醒
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
+      {/* 操作紀錄保留設定（僅管理員） */}
       {user?.role === 'admin' && (
         <div className="card">
           <div className="flex items-center gap-3 mb-6">

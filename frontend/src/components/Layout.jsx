@@ -10,6 +10,8 @@ import { useAuth } from '../contexts/AuthContext'
 import { Film, LogOut, Settings, Upload, Users, Edit, Mail, Menu, X, ScrollText } from 'lucide-react'
 import Modal from './Modal'
 import { PrivacyPolicy, TermsOfService } from './LegalDocs'
+import { useToast } from '../contexts/ToastContext'
+import BrandTransition from './BrandTransition'
 
 export default function Layout({ children }) {
   const { user, signOut } = useAuth()
@@ -17,13 +19,20 @@ export default function Layout({ children }) {
   const location = useLocation()
   const [activeModal, setActiveModal] = useState(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [signingOut, setSigningOut] = useState(false)
+  const { showToast } = useToast()
   
   async function handleSignOut() {
     try {
+      setSigningOut(true)
       await signOut()
+      showToast('已成功登出，期待下次見面！', 'info')
       navigate('/login')
     } catch (error) {
       console.error('登出失敗:', error)
+      showToast('登出失敗，請稍後再試', 'error')
+    } finally {
+      setSigningOut(false)
     }
   }
 
@@ -70,7 +79,14 @@ export default function Layout({ children }) {
     : 'MVI影片選擇系統問題 - '
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-gray-50 flex.flex-col">
+      <BrandTransition
+        isVisible={signingOut}
+        tips={[
+          '正在安全登出，請稍候...',
+          '為了保護您的資料，我們正在清理暫存資訊'
+        ]}
+      />
       {/* 導航欄 - Glass Effect */}
       <nav className="sticky top-0 z-50 w-full glass">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -104,14 +120,11 @@ export default function Layout({ children }) {
                         <NavLink to="/users" icon={Users}>用戶管理</NavLink>
                         <NavLink to="/mail" icon={Mail}>郵件管理</NavLink>
                         <NavLink to="/logs" icon={ScrollText}>操作紀錄</NavLink>
+                        <NavLink to="/movies" icon={Film}>選擇影片</NavLink>
                       </>
                     )}
                   </>
                 ) : (
-                  <NavLink to="/movies" icon={Film}>選擇影片</NavLink>
-                )}
-                
-                {(user?.role === 'admin' || user?.role === 'uploader') && (
                   <NavLink to="/movies" icon={Film}>選擇影片</NavLink>
                 )}
               </div>
@@ -131,13 +144,30 @@ export default function Layout({ children }) {
                 <Settings className="h-5 w-5" />
               </Link>
               
-              <button
-                onClick={handleSignOut}
-                className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-all"
-                title="登出"
-              >
-                <LogOut className="h-5 w-5" />
-              </button>
+              <div className="flex flex-col items-center gap-1">
+                <button
+                  onClick={handleSignOut}
+                  disabled={signingOut}
+                  className={`p-2 rounded-full transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-red-500 ${
+                    signingOut
+                      ? 'text-red-400 bg-red-50 cursor-wait'
+                      : 'text-gray-500 hover:text-red-600 hover:bg-red-50'
+                  }`}
+                  title="登出"
+                >
+                  {signingOut ? (
+                    <span className="inline-flex items-center justify-center">
+                      <span className="spinner w-4 h-4 border-red-500" aria-hidden="true"></span>
+                      <span className="sr-only">正在登出</span>
+                    </span>
+                  ) : (
+                    <LogOut className="h-5 w-5" />
+                  )}
+                </button>
+                {signingOut && (
+                  <span className="text-xs text-red-500 animate-pulse">正在登出...</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -164,10 +194,6 @@ export default function Layout({ children }) {
                   )}
                 </>
               ) : (
-                <MobileNavLink to="/movies" icon={Film}>選擇影片</MobileNavLink>
-              )}
-              
-              {(user?.role === 'admin' || user?.role === 'uploader') && (
                 <MobileNavLink to="/movies" icon={Film}>選擇影片</MobileNavLink>
               )}
             </div>

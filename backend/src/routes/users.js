@@ -18,6 +18,90 @@ async function fetchProfileById(userId) {
   return data
 }
 
+/**
+ * POST /api/users
+ * 管理員建立新使用者
+ */
+router.post('/', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { email, password, name, role } = req.body
+
+    if (!email || !password || !name || !role) {
+      return res.status(400).json({ error: 'ValidationError', message: '請填寫完整欄位（Email、密碼、名稱、角色）' })
+    }
+
+    if (!ALLOWED_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'ValidationError', message: '無效的角色類型' })
+    }
+
+    // 1. 建立 Supabase Auth User
+    const { data: authData, error: createError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true, // 自動驗證 Email，讓使用者可直接登入
+      user_metadata: { 
+        full_name: name,
+        role 
+      }
+    })
+
+    if (createError) {
+      throw createError
+    }
+
+    const newUser = authData.user
+
+    // 2. 確保 Profile 存在 (手動寫入以防 Trigger 延遲或失敗)
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .upsert({
+        id: newUser.id,
+        email: email,
+        name: name,
+        role: role,
+        updated_at: new Date().toISOString()
+      })
+
+    if (profileError) {
+      console.warn('Profile 寫入失敗 (可能由 Trigger 處理):', profileError.message)
+    }
+
+    // 3. 記錄操作日誌
+    await recordOperationLog({
+      req,
+      action: 'users.create',
+      target: {
+        id: newUser.id,
+        name: name,
+        email: email,
+      },
+      description: `建立使用者：${name} (${role})`,
+      metadata: {
+        role,
+        createdByAdmin: true
+      },
+    })
+
+    res.status(201).json({
+      success: true,
+      data: {
+        id: newUser.id,
+        email,
+        name,
+        role
+      },
+      message: '使用者建立成功'
+    })
+
+  } catch (error) {
+    console.error('建立使用者失敗:', error)
+    res.status(500).json({ 
+      error: 'UserCreationError', 
+      message: error.message || '建立使用者失敗' 
+    })
+  }
+})
+
 router.put('/:id/role', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params

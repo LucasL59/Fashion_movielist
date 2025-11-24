@@ -2,7 +2,7 @@
  * 操作紀錄頁面（僅管理員）
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   ChevronDown,
@@ -36,7 +36,10 @@ const ACTION_LABELS = {
   'mail.recipient.remove': '移除郵件收件者',
   'mail.recipient.update': '更新郵件收件者',
   'users.role_change': '用戶角色變更',
+  'users.create': '建立使用者',
+  'users.delete': '刪除使用者',
   'settings.operation_log_retention': '操作紀錄保留設定',
+  'settings.reminder_schedule': '提醒排程設定',
 }
 
 function formatDate(value) {
@@ -353,90 +356,86 @@ export default function OperationLogs() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
-                    {logs.map((log) => {
-                      const expanded = expandedRows[log.id]
-                      return (
-                        <>
-                          <tr key={log.id} className="bg-white">
-                            <td className="px-4 py-3 align-top text-gray-700">
-                              <p className="font-semibold text-gray-900">{formatDate(log.created_at)}</p>
-                              <p className="text-xs text-gray-500">IP：{log.ip_address || '未知'}</p>
-                            </td>
-                            <td className="px-4 py-3 align-top">
-                              <span className="inline-flex items-center rounded-full bg-primary-50 px-3 py-1 text-xs font-semibold text-primary-700">
-                                {ACTION_LABELS[log.action] || '未知動作'}
-                              </span>
-                              <p className="text-xs text-gray-400 mt-1 break-all">{log.action}</p>
-                            </td>
-                            <td className="px-4 py-3 align-top text-gray-700">
-                              <p className="font-medium">{log.actor_name || '—'}</p>
-                              <p className="text-xs text-gray-500 break-all">{log.actor_email || '—'}</p>
-                            </td>
-                            <td className="px-4 py-3 align-top text-gray-700">
-                              {log.target_user_name || log.target_user_email ? (
+                    {logs.map((log) => (
+                      <Fragment key={log.id}>
+                        <tr className="group transition-colors hover:bg-gray-50/50">
+                          <td className="px-4 py-3 align-top text-gray-500 whitespace-nowrap">
+                            <p className="font-medium text-gray-900">{formatDate(log.created_at)}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top">
+                            <span className="inline-flex items-center rounded-full bg-primary-50 px-2.5 py-0.5 text-xs font-medium text-primary-700 whitespace-nowrap">
+                              {ACTION_LABELS[log.action] || '未知動作'}
+                            </span>
+                            <p className="text-xs text-gray-400 mt-1 break-all">{log.action}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top text-gray-700">
+                            <p className="font-medium">{log.actor_name || '—'}</p>
+                            <p className="text-xs text-gray-500 break-all">{log.actor_email || '—'}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top text-gray-700">
+                            {log.target_user_name || log.target_user_email ? (
+                              <>
+                                <p className="font-medium">{log.target_user_name || '—'}</p>
+                                <p className="text-xs text-gray-500 break-all">{log.target_user_email || '—'}</p>
+                              </>
+                            ) : (
+                              <p className="text-gray-400">無</p>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 align-top text-gray-700">
+                            <p className="line-clamp-2 text-sm text-gray-600">{log.description || '—'}</p>
+                          </td>
+                          <td className="px-4 py-3 align-top text-right">
+                            <button
+                              type="button"
+                              className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-gray-300"
+                              onClick={() => toggleExpansion(log.id)}
+                            >
+                              {expandedRows[log.id] ? (
                                 <>
-                                  <p className="font-medium">{log.target_user_name || '—'}</p>
-                                  <p className="text-xs text-gray-500 break-all">{log.target_user_email || '—'}</p>
+                                  收合
+                                  <ChevronUp className="h-4 w-4" />
                                 </>
                               ) : (
-                                <p className="text-gray-400">無</p>
+                                <>
+                                  展開
+                                  <ChevronDown className="h-4 w-4" />
+                                </>
                               )}
-                            </td>
-                            <td className="px-4 py-3 align-top text-gray-700">
-                              <p className="line-clamp-2 text-sm text-gray-600">{log.description || '—'}</p>
-                            </td>
-                            <td className="px-4 py-3 align-top text-right">
-                              <button
-                                type="button"
-                                className="inline-flex items-center gap-1 rounded-full border border-gray-200 px-3 py-1 text-xs font-semibold text-gray-600 hover:border-gray-300"
-                                onClick={() => toggleExpansion(log.id)}
-                              >
-                                {expanded ? (
-                                  <>
-                                    收合
-                                    <ChevronUp className="h-4 w-4" />
-                                  </>
-                                ) : (
-                                  <>
-                                    展開
-                                    <ChevronDown className="h-4 w-4" />
-                                  </>
-                                )}
-                              </button>
+                            </button>
+                          </td>
+                        </tr>
+                        {expandedRows[log.id] && (
+                          <tr className="bg-gray-50/60">
+                            <td colSpan={6} className="px-6 py-5">
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <InfoBlock title="操作者">
+                                  <p className="text-base font-semibold text-gray-900">{log.actor_name || '—'}</p>
+                                  <p className="text-sm text-gray-500 break-all">{log.actor_email || '—'}</p>
+                                  <p className="text-xs text-gray-400 mt-1">角色：{log.actor_role || '未知'}</p>
+                                </InfoBlock>
+                                <InfoBlock title="目標與來源">
+                                  <p className="text-sm text-gray-600">{log.target_user_name || '無特定目標'}</p>
+                                  {log.target_user_email && (
+                                    <p className="text-xs text-gray-500 break-all">{log.target_user_email}</p>
+                                  )}
+                                  <p className="text-xs text-gray-500 mt-2">IP：{log.ip_address || '未知'}</p>
+                                  {log.user_agent && (
+                                    <p className="text-xs text-gray-400 break-words">UA：{log.user_agent}</p>
+                                  )}
+                                </InfoBlock>
+                              </div>
+                              <div className="mt-4">
+                                <InfoBlock title="描述 / 附註">
+                                  <p className="text-sm text-gray-700">{log.description || '—'}</p>
+                                  <MetadataList metadata={log.metadata} />
+                                </InfoBlock>
+                              </div>
                             </td>
                           </tr>
-                          {expanded && (
-                            <tr key={`${log.id}-detail`} className="bg-gray-50/60">
-                              <td colSpan={6} className="px-6 py-5">
-                                <div className="grid gap-4 md:grid-cols-2">
-                                  <InfoBlock title="操作者">
-                                    <p className="text-base font-semibold text-gray-900">{log.actor_name || '—'}</p>
-                                    <p className="text-sm text-gray-500 break-all">{log.actor_email || '—'}</p>
-                                    <p className="text-xs text-gray-400 mt-1">角色：{log.actor_role || '未知'}</p>
-                                  </InfoBlock>
-                                  <InfoBlock title="目標與來源">
-                                    <p className="text-sm text-gray-600">{log.target_user_name || '無特定目標'}</p>
-                                    {log.target_user_email && (
-                                      <p className="text-xs text-gray-500 break-all">{log.target_user_email}</p>
-                                    )}
-                                    <p className="text-xs text-gray-500 mt-2">IP：{log.ip_address || '未知'}</p>
-                                    {log.user_agent && (
-                                      <p className="text-xs text-gray-400 break-words">UA：{log.user_agent}</p>
-                                    )}
-                                  </InfoBlock>
-                                </div>
-                                <div className="mt-4">
-                                  <InfoBlock title="描述 / 附註">
-                                    <p className="text-sm text-gray-700">{log.description || '—'}</p>
-                                    <MetadataList metadata={log.metadata} />
-                                  </InfoBlock>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </>
-                      )
-                    })}
+                        )}
+                      </Fragment>
+                    ))}
                   </tbody>
                 </table>
               </div>

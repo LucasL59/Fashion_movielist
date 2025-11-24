@@ -6,11 +6,11 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Users, Shield, Upload as UploadIcon, User, CheckCircle, AlertCircle, KeyRound } from 'lucide-react'
+import { Users, Shield, Upload as UploadIcon, User, CheckCircle, AlertCircle, KeyRound, Plus, Trash2 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import Select from '../components/Select'
 import Modal from '../components/Modal'
-import { adminResetUserPassword, updateUserRole } from '../lib/api'
+import { adminResetUserPassword, updateUserRole, createUser, deleteUser } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
 
 export default function UserManagement() {
@@ -20,10 +20,23 @@ export default function UserManagement() {
   const [updating, setUpdating] = useState(null)
   const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
+  
+  // 重設密碼狀態
   const [resetTarget, setResetTarget] = useState(null)
   const [resetForm, setResetForm] = useState({ password: '', confirmPassword: '' })
   const [resetError, setResetError] = useState('')
   const [resetLoading, setResetLoading] = useState(false)
+
+  // 刪除使用者狀態
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  // 新增使用者狀態
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [createForm, setCreateForm] = useState({ name: '', email: '', password: '', role: 'customer' })
+  const [createError, setCreateError] = useState('')
+  const [createLoading, setCreateLoading] = useState(false)
+
   const { showToast } = useToast()
   
   useEffect(() => {
@@ -31,6 +44,36 @@ export default function UserManagement() {
       loadUsers()
     }
   }, [user])
+
+  // ... (省略中間的 helper functions)
+
+  async function handleCreateUser(e) {
+    e.preventDefault()
+    if (!createForm.name || !createForm.email || !createForm.password) {
+      setCreateError('請填寫所有必填欄位')
+      return
+    }
+    if (createForm.password.length < 6) {
+      setCreateError('密碼長度至少需 6 個字元')
+      return
+    }
+
+    try {
+      setCreateLoading(true)
+      setCreateError('')
+      await createUser(createForm)
+      
+      showToast('使用者建立成功', 'success')
+      setIsCreateModalOpen(false)
+      setCreateForm({ name: '', email: '', password: '', role: 'customer' })
+      loadUsers() // 重新載入列表
+    } catch (err) {
+      console.error('建立使用者失敗:', err)
+      setCreateError(err.response?.data?.message || '建立使用者失敗')
+    } finally {
+      setCreateLoading(false)
+    }
+  }
 
   function openResetModal(targetUser) {
     setResetTarget(targetUser)
@@ -67,6 +110,21 @@ export default function UserManagement() {
       setResetError(err.response?.data?.message || '重設密碼失敗，請稍後再試')
     } finally {
       setResetLoading(false)
+    }
+  }
+
+  async function handleDeleteUser() {
+    try {
+      setDeleteLoading(true)
+      await deleteUser(deleteTarget.id)
+      showToast('使用者已刪除', 'success')
+      setDeleteTarget(null)
+      loadUsers() // 重新載入列表
+    } catch (err) {
+      console.error('刪除使用者失敗:', err)
+      setError(err.response?.data?.message || '刪除使用者失敗')
+    } finally {
+      setDeleteLoading(false)
     }
   }
   
@@ -163,9 +221,17 @@ export default function UserManagement() {
   return (
     <div className="space-y-8">
       {/* 標題 */}
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">用戶管理</h1>
-        <p className="text-gray-600 mt-2">管理所有用戶的角色權限</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">用戶管理</h1>
+          <p className="text-gray-600 mt-2">管理所有用戶的角色權限</p>
+        </div>
+        <button
+          onClick={() => setIsCreateModalOpen(true)}
+          className="btn btn-primary"
+        >
+          <Plus className="h-4 w-4" /> 新增使用者
+        </button>
       </div>
       
       {/* 成功訊息 */}
@@ -231,6 +297,7 @@ export default function UserManagement() {
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">變更角色</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">密碼操作</th>
                   <th className="text-left py-3 px-4 font-semibold text-gray-700">註冊時間</th>
+                  <th className="text-left py-3 px-4 font-semibold text-gray-700">刪除</th>
                 </tr>
               </thead>
               <tbody>
@@ -284,6 +351,17 @@ export default function UserManagement() {
                     <td className="py-3 px-4 text-sm text-gray-500">
                       {new Date(u.created_at).toLocaleDateString('zh-TW')}
                     </td>
+                    <td className="py-3 px-4">
+                      {u.id !== user.id && (
+                        <button
+                          onClick={() => setDeleteTarget(u)}
+                          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="刪除使用者"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                        </button>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -292,6 +370,7 @@ export default function UserManagement() {
         )}
       </div>
 
+      {/* 重設密碼 Modal */}
       <Modal
         isOpen={!!resetTarget}
         onClose={() => setResetTarget(null)}
@@ -337,6 +416,112 @@ export default function UserManagement() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* 新增使用者 Modal */}
+      <Modal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        title="新增使用者"
+        footer={null}
+      >
+        <form onSubmit={handleCreateUser} className="space-y-4">
+          {createError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+              {createError}
+            </div>
+          )}
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">姓名 / 顯示名稱</label>
+            <input
+              type="text"
+              value={createForm.name}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, name: e.target.value }))}
+              className="input"
+              placeholder="例如：王小明"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email (登入帳號)</label>
+            <input
+              type="email"
+              value={createForm.email}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+              className="input"
+              placeholder="example@company.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">登入密碼</label>
+            <input
+              type="password"
+              value={createForm.password}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+              className="input"
+              placeholder="至少 6 個字元"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">角色權限</label>
+            <select
+              value={createForm.role}
+              onChange={(e) => setCreateForm(prev => ({ ...prev, role: e.target.value }))}
+              className="input appearance-none"
+            >
+              <option value="customer">客戶 (只能選擇影片)</option>
+              <option value="uploader">上傳者 (可上傳/編輯影片)</option>
+              <option value="admin">管理員 (完整權限)</option>
+            </select>
+          </div>
+
+          <div className="flex justify-end gap-3 pt-4">
+            <button type="button" className="btn btn-ghost" onClick={() => setIsCreateModalOpen(false)}>
+              取消
+            </button>
+            <button type="submit" className="btn btn-primary" disabled={createLoading}>
+              {createLoading ? '建立中...' : '確認建立'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* 刪除使用者 Modal */}
+      <Modal
+        isOpen={!!deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        title="確認刪除使用者"
+        footer={
+          <div className="flex justify-end gap-3">
+            <button className="btn btn-secondary" onClick={() => setDeleteTarget(null)}>取消</button>
+            <button className="btn btn-primary bg-red-600 hover:bg-red-700 border-none" onClick={handleDeleteUser} disabled={deleteLoading}>
+              {deleteLoading ? '刪除中...' : '確認刪除'}
+            </button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 text-gray-600">
+            <div className="p-2 bg-red-50 rounded-full text-red-600">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="font-semibold text-gray-900 mb-1">您確定要刪除此使用者嗎？</p>
+              <p>
+                將刪除 <strong>{deleteTarget?.name}</strong> ({deleteTarget?.email})。
+              </p>
+              <p className="text-sm text-gray-500 mt-2">
+                此操作將永久刪除該使用者的帳號以及相關的個人設定。此動作無法復原。
+              </p>
+            </div>
+          </div>
+        </div>
       </Modal>
     </div>
   )

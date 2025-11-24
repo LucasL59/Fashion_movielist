@@ -13,6 +13,7 @@ import { useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import AdminDashboard from './pages/AdminDashboard'
+import UploaderDashboard from './pages/UploaderDashboard'
 import CustomerDashboard from './pages/CustomerDashboard'
 import MovieSelection from './pages/MovieSelection'
 import Settings from './pages/Settings'
@@ -71,7 +72,13 @@ function AppRoutes() {
       <Route path="/" element={
         <ProtectedRoute>
           <Layout>
-            {(user?.role === 'admin' || user?.role === 'uploader') ? <AdminDashboard /> : <CustomerDashboard />}
+            {user?.role === 'admin' ? (
+              <AdminDashboard />
+            ) : user?.role === 'uploader' ? (
+              <UploaderDashboard />
+            ) : (
+              <CustomerDashboard />
+            )}
           </Layout>
         </ProtectedRoute>
       } />
@@ -93,7 +100,7 @@ function AppRoutes() {
       <Route path="/movies" element={
         <ProtectedRoute>
           <Layout>
-            <MovieSelection />
+            {user?.role === 'uploader' ? <Navigate to="/admin" replace /> : <MovieSelection />}
           </Layout>
         </ProtectedRoute>
       } />

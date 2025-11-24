@@ -6,8 +6,9 @@
 
 import express from 'express'
 import { supabase } from '../config/supabase.js'
-import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { requireAuth, requireAdmin, requireRoles } from '../middleware/auth.js'
 import { recordOperationLog } from '../services/operationLogService.js'
+import { notifyCustomersNewList } from '../services/emailService.js'
 
 const router = express.Router()
 

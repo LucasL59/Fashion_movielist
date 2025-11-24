@@ -5,37 +5,65 @@
  */
 
 import express from 'express';
-import { updateReminderSchedule, sendReminderNow } from '../services/reminderService.js';
+import { updateReminderSchedule, sendReminderNow, getReminderConfig } from '../services/reminderService.js';
+import { requireAuth, requireAdmin } from '../middleware/auth.js';
+import { recordOperationLog } from '../services/operationLogService.js';
 
 const router = express.Router();
+
+router.use(requireAuth, requireAdmin);
+
+/**
+ * GET /api/reminders/settings
+ * 
+ * 取得目前提醒設定
+ */
+router.get('/settings', async (req, res) => {
+  try {
+    const config = await getReminderConfig();
+    res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    console.error('取得提醒設定錯誤:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: '無法取得提醒設定' 
+    });
+  }
+});
 
 /**
  * POST /api/reminders/schedule
  * 
- * 設定提醒排程
+ * 更新提醒設定
  */
 router.post('/schedule', async (req, res) => {
   try {
-    const { cronSchedule, message, targetEmail } = req.body;
-    
-    if (!cronSchedule) {
-      return res.status(400).json({ 
-        error: 'Bad Request',
-        message: '請提供 cron 排程格式' 
-      });
-    }
+    // 接收完整的設定物件
+    const config = req.body;
     
     // 更新排程
-    updateReminderSchedule(cronSchedule, message, targetEmail);
+    const updatedConfig = await updateReminderSchedule(config);
+
+    await recordOperationLog({
+      req,
+      action: 'settings.reminder_schedule',
+      resourceType: 'system_settings',
+      resourceId: 'reminder_config',
+      description: `更新每月提醒排程設定：${config.enabled ? '啟用' : '停用'}`,
+      metadata: {
+        enabled: config.enabled,
+        cronSchedule: config.cronSchedule,
+        recipientType: config.recipientType
+      }
+    });
     
     res.json({
       success: true,
-      message: '提醒排程已更新',
-      data: {
-        cronSchedule,
-        message: message || '預設提醒訊息',
-        targetEmail: targetEmail || process.env.ADMIN_EMAIL
-      }
+      message: '提醒設定已更新',
+      data: updatedConfig
     });
     
   } catch (error) {

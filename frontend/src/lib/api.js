@@ -231,6 +231,11 @@ export async function getBatchSelections(batchId) {
 /**
  * 設定提醒排程
  */
+export async function getReminderSettings() {
+  const response = await api.get('/api/reminders/settings')
+  return response.data
+}
+
 export async function setReminderSchedule(data) {
   const response = await api.post('/api/reminders/schedule', data)
   return response.data
@@ -274,6 +279,16 @@ export async function updateUserRole(userId, role) {
   return response.data
 }
 
+export async function createUser(userData) {
+  const response = await api.post('/api/users', userData)
+  return response.data
+}
+
+export async function deleteUser(userId) {
+  const response = await api.delete(`/api/users/${userId}`)
+  return response.data
+}
+
 export async function getOperationLogRetentionSetting() {
   const response = await api.get('/api/system-settings/operation-logs')
   return response.data
@@ -295,14 +310,20 @@ export async function getCustomerDashboardStatus(userId) {
 /**
  * 取得管理員/上傳者儀表板概況
  */
-export async function getAdminDashboardOverview() {
-  const response = await api.get('/api/dashboard/admin/overview')
+export async function getAdminDashboardOverview(batchId = null) {
+  const params = batchId ? { batchId } : {}
+  const response = await api.get('/api/dashboard/admin/overview', { params })
   return response.data
 }
 
 /**
  * 取得操作紀錄清單（僅管理員）
  */
+export async function resendUploadNotification(batchId, batchName) {
+  const response = await api.post('/api/mail-rules/notifications/upload', { batchId, batchName })
+  return response.data
+}
+
 export async function getOperationLogs(params = {}) {
   const response = await api.get('/api/operation-logs', { params })
   return response.data

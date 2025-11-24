@@ -43,15 +43,15 @@
   /* 現代化按鈕 - Pill Shape */
   .btn {
     @apply inline-flex items-center justify-center gap-2;
-    @apply px-4 py-2 rounded-full font-medium text-sm transition-all duration-300;
-    @apply focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
-    @apply active:scale-95 hover:-translate-y-0.5;
+    @apply px-4 py-2 rounded-lg font-medium text-sm transition-all duration-200;
+    @apply focus:outline-none focus:ring-2 focus:ring-offset-1 disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply active:scale-[0.98] hover:-translate-y-0.5;
   }
   
   .btn-primary {
     @apply btn;
-    @apply bg-primary-600 text-white shadow-lg shadow-primary-500/20;
-    @apply hover:bg-primary-500 hover:shadow-primary-500/30;
+    @apply bg-primary-600 text-white shadow-md shadow-primary-500/10;
+    @apply hover:bg-primary-500 hover:shadow-lg hover:shadow-primary-500/20;
     @apply focus:ring-primary-500;
   }
   
@@ -71,8 +71,8 @@
   
   .btn-danger {
     @apply btn;
-    @apply bg-red-500 text-white shadow-lg shadow-red-500/20;
-    @apply hover:bg-red-400 hover:shadow-red-500/30;
+    @apply bg-red-500 text-white shadow-md shadow-red-500/10;
+    @apply hover:bg-red-400 hover:shadow-lg hover:shadow-red-500/20;
     @apply focus:ring-red-500;
   }
   
@@ -82,30 +82,30 @@
   }
   
   .btn-sm {
-    @apply px-4 py-1.5 text-xs;
+    @apply px-3 py-1.5 text-xs;
   }
   
   .btn-lg {
-    @apply px-8 py-4 text-base;
+    @apply px-6 py-3 text-base;
   }
   
-  /* 現代化輸入框 */
+  /* 現代化輸入框 - Compact & Refined */
   .input {
-    @apply w-full px-4 py-3 rounded-2xl border border-gray-200 bg-gray-50/50;
-    @apply text-gray-900 placeholder:text-gray-400 font-medium;
-    @apply focus:outline-none focus:bg-white focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10;
+    @apply w-full px-3 py-2 rounded-xl border border-gray-200 bg-white;
+    @apply text-sm text-gray-900 placeholder:text-gray-400 font-medium;
+    @apply focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10;
     @apply transition-all duration-200 ease-out;
   }
   
   .select {
-    @apply appearance-none w-full px-4 py-3 rounded-2xl border border-gray-200 bg-white;
-    @apply text-gray-900 font-medium cursor-pointer;
-    @apply focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10;
+    @apply appearance-none w-full px-3 py-2 rounded-xl border border-gray-200 bg-white;
+    @apply text-sm text-gray-900 font-medium cursor-pointer;
+    @apply focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10;
     @apply transition-all duration-200;
     background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
-    background-position: right 1rem center;
+    background-position: right 0.75rem center;
     background-repeat: no-repeat;
-    background-size: 1.5em 1.5em;
+    background-size: 1.25em 1.25em;
   }
   
   /* 現代化卡片 */

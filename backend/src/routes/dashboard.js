@@ -81,18 +81,47 @@ router.get('/customer/:userId', async (req, res) => {
  *
  * 提供管理員/上傳者需要的當月上傳與選擇概況
  */
-router.get('/admin/overview', async (_req, res) => {
+router.get('/admin/overview', async (req, res) => {
   try {
-    const { data: latestBatch, error: batchError } = await supabase
-      .from('batches')
-      .select('*')
-      .eq('status', 'active')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { batchId } = req.query;
 
-    if (batchError && batchError.code !== 'PGRST116') {
-      throw batchError;
+    // 取得所有批次列表供選單使用
+    const { data: allBatches, error: allBatchesError } = await supabase
+      .from('batches')
+      .select('id, name, created_at, status')
+      .order('created_at', { ascending: false });
+      
+    if (allBatchesError) throw allBatchesError;
+
+    let targetBatch = null;
+
+    if (batchId) {
+      // 如果有指定 batchId，查詢該批次
+      const { data, error } = await supabase
+        .from('batches')
+        .select('*')
+        .eq('id', batchId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      targetBatch = data;
+    } else {
+      // 否則找最新的 active 批次（預設行為）
+      const { data, error } = await supabase
+        .from('batches')
+        .select('*')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      targetBatch = data;
+      
+      // 如果沒有 active 批次，但有歷史批次，則取最新的歷史批次
+      if (!targetBatch && allBatches?.length > 0) {
+        targetBatch = allBatches[0];
+      }
     }
 
     const { data: users, error: usersError } = await supabase
@@ -108,11 +137,11 @@ router.get('/admin/overview', async (_req, res) => {
     let pendingCount = customers.length;
     let uploaderProfile = null;
 
-    if (latestBatch?.uploader_id) {
+    if (targetBatch?.uploader_id) {
       const { data: uploaderData, error: uploaderError } = await supabase
         .from('profiles')
         .select('id, name, email, role')
-        .eq('id', latestBatch.uploader_id)
+        .eq('id', targetBatch.uploader_id)
         .maybeSingle();
 
       if (uploaderError && uploaderError.code !== 'PGRST116') {
@@ -122,11 +151,11 @@ router.get('/admin/overview', async (_req, res) => {
       uploaderProfile = uploaderData || null;
     }
 
-    if (latestBatch) {
+    if (targetBatch) {
       const { data: selectionRows, error: selectionError } = await supabase
         .from('selections')
         .select('user_id, video_ids, created_at')
-        .eq('batch_id', latestBatch.id);
+        .eq('batch_id', targetBatch.id);
 
       if (selectionError) throw selectionError;
 
@@ -154,7 +183,8 @@ router.get('/admin/overview', async (_req, res) => {
     res.json({
       success: true,
       data: {
-        latestBatch: latestBatch || null,
+        latestBatch: targetBatch || null, // 前端欄位名稱維持 latestBatch 以減少修改，實際代表 currentSelectedBatch
+        allBatches: allBatches || [],
         uploader: uploaderProfile,
         totalCustomers: customers.length,
         submittedCount,

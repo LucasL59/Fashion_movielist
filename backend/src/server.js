@@ -150,7 +150,6 @@ app.listen(PORT, () => {
   
   // 初始化提醒排程器
   initializeReminderScheduler();
-  console.log('⏰ 提醒排程器已初始化');
 });
 
 export default app;

@@ -83,9 +83,9 @@ export default function Select({
         onClick={toggleOpen}
         disabled={disabled}
         className={`
-          relative w-full bg-white border border-gray-200 rounded-xl pl-4 pr-10 py-2.5 text-left cursor-pointer
+          relative w-full bg-white border border-gray-200 rounded-xl pl-3 pr-10 py-2 text-left cursor-pointer
           focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500
-          transition-all duration-200 flex items-center
+          transition-all duration-200 flex items-center text-sm font-medium
           ${disabled ? 'opacity-60 cursor-not-allowed bg-gray-50' : 'hover:border-gray-300'}
           ${isOpen ? 'ring-2 ring-primary-500/20 border-primary-500' : ''}
         `}
@@ -129,7 +129,7 @@ export default function Select({
                   key={option.value}
                   onClick={() => handleSelect(option.value)}
                   className={`
-                    cursor-pointer select-none relative py-2.5 pl-4 pr-9 hover:bg-primary-50 transition-colors
+                    cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-primary-50 transition-colors text-sm
                     ${option.value === value ? 'text-primary-600 bg-primary-50/50 font-medium' : 'text-gray-700'}
                   `}
                 >
