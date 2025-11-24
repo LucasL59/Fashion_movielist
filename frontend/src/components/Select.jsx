@@ -13,6 +13,7 @@ export default function Select({
   const [isOpen, setIsOpen] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0, width: 0 })
   const containerRef = useRef(null)
+  const dropdownRef = useRef(null)
 
   const selectedOption = options.find(opt => opt.value === value)
 
@@ -31,7 +32,15 @@ export default function Select({
       setIsOpen(false)
     }
 
-    const handleScroll = () => setIsOpen(false)
+    const handleScroll = (event) => {
+      if (dropdownRef.current && dropdownRef.current.contains(event.target)) {
+        return
+      }
+      if (containerRef.current && containerRef.current.contains(event.target)) {
+        return
+      }
+      setIsOpen(false)
+    }
     const handleResize = () => setIsOpen(false)
 
     window.addEventListener('click', handleGlobalClick)
@@ -91,13 +100,26 @@ export default function Select({
 
       {isOpen && createPortal(
         <div 
-          className="select-dropdown-portal absolute z-[9999] bg-white/95 backdrop-blur-xl rounded-xl shadow-xl max-h-60 overflow-auto border border-gray-100 focus:outline-none scrollbar-hide"
+          ref={dropdownRef}
+          className="select-dropdown-portal absolute z-[9999] bg-white/95 backdrop-blur-xl rounded-2xl shadow-xl max-h-60 overflow-y-auto border border-gray-100 focus:outline-none pr-1 custom-scrollbar"
           style={{
             top: position.top,
             left: position.left,
             width: position.width,
           }}
         >
+          <style>{`
+            .select-dropdown-portal::-webkit-scrollbar {
+              width: 6px;
+            }
+            .select-dropdown-portal::-webkit-scrollbar-thumb {
+              background-color: rgba(156, 163, 175, 0.7);
+              border-radius: 999px;
+            }
+            .select-dropdown-portal::-webkit-scrollbar-thumb:hover {
+              background-color: rgba(107, 114, 128, 0.9);
+            }
+          `}</style>
           <div className="py-1">
             {options.length === 0 ? (
               <div className="px-4 py-2 text-sm text-gray-500">無選項</div>

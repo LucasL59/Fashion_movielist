@@ -7,6 +7,8 @@
 import express from 'express';
 import { parseExcelAndUpload } from '../services/excelService.js';
 import { notifyCustomersNewList } from '../services/emailService.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { recordOperationLog } from '../services/operationLogService.js';
 
 const router = express.Router();
 
@@ -15,7 +17,7 @@ const router = express.Router();
  * 
  * 上傳 Excel 檔案並解析影片清單
  */
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, requireRoles(['admin', 'uploader']), async (req, res) => {
   try {
     // 檢查是否有上傳檔案
     if (!req.files || !req.files.file) {
@@ -39,7 +41,7 @@ router.post('/', async (req, res) => {
     }
     
     // 獲取上傳者資訊（從請求中）
-    const uploaderId = req.body.userId || 'admin';
+    const uploaderId = req.authUser?.id || req.body.userId || null;
     
     // 從檔案名稱提取月份（例如: "UIP片單金隆11月.xlsx" -> "2024-11"）
     const fileName = file.name;
@@ -96,6 +98,20 @@ router.post('/', async (req, res) => {
       // 即使通知失敗，上傳仍然成功
     }
     
+    await recordOperationLog({
+      req,
+      action: 'upload.batch_import',
+      resourceType: 'batch',
+      resourceId: result.batchId,
+      description: `${req.authUserProfile?.name || '未知用戶'} 上傳批次 ${batchName}`,
+      metadata: {
+        batchId: result.batchId,
+        batchName: result.batchName,
+        videoCount: result.videoCount,
+        month: extractedMonth,
+      },
+    })
+
     res.json({
       success: true,
       message: '影片清單上傳成功',

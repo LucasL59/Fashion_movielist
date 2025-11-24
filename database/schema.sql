@@ -258,6 +258,47 @@ CREATE INDEX IF NOT EXISTS idx_mail_rules_event ON public.mail_rules(event_type)
 CREATE INDEX IF NOT EXISTS idx_mail_rules_recipient ON public.mail_rules(recipient_email);
 CREATE INDEX IF NOT EXISTS idx_mail_rules_profile ON public.mail_rules(profile_id);
 
+-- ==========================================
+-- 7. 建立 Operation Logs 表（操作紀錄）
+-- ==========================================
+
+CREATE TABLE IF NOT EXISTS public.operation_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  actor_name TEXT,
+  actor_email TEXT,
+  actor_role TEXT,
+  target_user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  target_user_name TEXT,
+  target_user_email TEXT,
+  action TEXT NOT NULL,
+  resource_type TEXT,
+  resource_id TEXT,
+  description TEXT,
+  ip_address TEXT,
+  user_agent TEXT,
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_operation_logs_actor ON public.operation_logs(actor_id);
+CREATE INDEX IF NOT EXISTS idx_operation_logs_target ON public.operation_logs(target_user_id);
+CREATE INDEX IF NOT EXISTS idx_operation_logs_action ON public.operation_logs(action);
+CREATE INDEX IF NOT EXISTS idx_operation_logs_created_at ON public.operation_logs(created_at DESC);
+
+ALTER TABLE public.operation_logs ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Admins can view operation logs" ON public.operation_logs;
+CREATE POLICY "Admins can view operation logs"
+  ON public.operation_logs
+  FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.profiles
+      WHERE id = auth.uid() AND role = 'admin'
+    )
+  );
+
 ALTER TABLE public.mail_rules ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Admins can manage mail rules"

@@ -269,6 +269,21 @@ export async function adminResetUserPassword(userId, newPassword) {
   return response.data
 }
 
+export async function updateUserRole(userId, role) {
+  const response = await api.put(`/api/users/${userId}/role`, { role })
+  return response.data
+}
+
+export async function getOperationLogRetentionSetting() {
+  const response = await api.get('/api/system-settings/operation-logs')
+  return response.data
+}
+
+export async function updateOperationLogRetention({ retentionDays }) {
+  const response = await api.put('/api/system-settings/operation-logs', { retentionDays })
+  return response.data
+}
+
 /**
  * 取得客戶儀表板狀態
  */
@@ -282,6 +297,27 @@ export async function getCustomerDashboardStatus(userId) {
  */
 export async function getAdminDashboardOverview() {
   const response = await api.get('/api/dashboard/admin/overview')
+  return response.data
+}
+
+/**
+ * 取得操作紀錄清單（僅管理員）
+ */
+export async function getOperationLogs(params = {}) {
+  const response = await api.get('/api/operation-logs', { params })
+  return response.data
+}
+
+/**
+ * 取得所有 operation action 類別
+ */
+export async function getOperationLogActions() {
+  const response = await api.get('/api/operation-logs/actions')
+  return response.data
+}
+
+export async function recordOperationEvent(payload) {
+  const response = await api.post('/api/operation-logs/events', payload)
   return response.data
 }
 

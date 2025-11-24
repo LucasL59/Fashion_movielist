@@ -7,6 +7,8 @@
 import express from 'express';
 import { supabase } from '../config/supabase.js';
 import { notifyAdminCustomerSelection } from '../services/emailService.js';
+import { requireAuth } from '../middleware/auth.js';
+import { recordOperationLog } from '../services/operationLogService.js';
 
 const router = express.Router();
 
@@ -15,12 +17,24 @@ const router = express.Router();
  * 
  * 客戶提交影片選擇
  */
-router.post('/', async (req, res) => {
+router.post('/', requireAuth, async (req, res) => {
   try {
-    const { userId, batchId, videoIds, customerName, customerEmail } = req.body;
+    const { batchId, videoIds } = req.body;
+    const customerNameInput = req.body.customerName;
+    const customerEmailInput = req.body.customerEmail;
+    const authProfile = req.authUserProfile;
+    const authUser = req.authUser;
+    const userId = authProfile?.id || authUser?.id;
     
     // 驗證必要欄位
-    if (!userId || !batchId || !videoIds || !Array.isArray(videoIds)) {
+    if (!userId) {
+      return res.status(401).json({ 
+        error: 'Unauthorized',
+        message: '請先登入後再提交選擇' 
+      });
+    }
+
+    if (!batchId || !videoIds || !Array.isArray(videoIds)) {
       return res.status(400).json({ 
         error: 'Bad Request',
         message: '缺少必要欄位或格式錯誤' 
@@ -33,6 +47,9 @@ router.post('/', async (req, res) => {
         message: '請至少選擇一部影片' 
       });
     }
+
+    const finalCustomerName = customerNameInput || authProfile?.name || authUser?.user_metadata?.name || authUser?.email || customerEmailInput;
+    const finalCustomerEmail = customerEmailInput || authProfile?.email || authUser?.email;
     
     // 檢查是否已經提交過選擇
     const { data: existingSelection } = await supabase
@@ -87,8 +104,8 @@ router.post('/', async (req, res) => {
     // 發送通知給管理員
     try {
       await notifyAdminCustomerSelection({
-        customerName: customerName || userId,
-        customerEmail: customerEmail || 'unknown@example.com',
+        customerName: finalCustomerName || userId,
+        customerEmail: finalCustomerEmail || 'unknown@example.com',
         batchId,
         videos: selectedVideos || []
       });
@@ -98,6 +115,20 @@ router.post('/', async (req, res) => {
       // 即使通知失敗，選擇仍然成功
     }
     
+    await recordOperationLog({
+      req,
+      action: 'selections.submit',
+      resourceType: 'selection',
+      resourceId: result.id,
+      description: `${finalCustomerName || '使用者'}${existingSelection ? '更新' : '提交'}影片選擇`,
+      metadata: {
+        batchId,
+        videoCount: videoIds.length,
+        videoIds,
+        isUpdate: Boolean(existingSelection)
+      }
+    })
+
     res.json({
       success: true,
       message: '影片選擇已提交',

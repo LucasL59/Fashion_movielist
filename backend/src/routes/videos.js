@@ -8,6 +8,8 @@ import express from 'express';
 import { supabase } from '../config/supabase.js';
 import { v4 as uuidv4 } from 'uuid';
 import path from 'path';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { recordOperationLog } from '../services/operationLogService.js';
 
 const router = express.Router();
 
@@ -229,10 +231,10 @@ router.get('/:id', async (req, res) => {
  * 
  * 更新影片資訊（admin 和 uploader）
  */
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireAuth, requireRoles(['admin', 'uploader']), async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const updates = { ...req.body };
     
     // 移除不應該被更新的欄位
     delete updates.id;
@@ -285,6 +287,18 @@ router.put('/:id', async (req, res) => {
     
     if (error) throw error;
     
+    await recordOperationLog({
+      req,
+      action: 'videos.update',
+      resourceType: 'video',
+      resourceId: id,
+      description: `更新影片：${video.title || id}`,
+      metadata: {
+        updatedFields: Object.keys(updates),
+        hasNewThumbnail: Boolean(req.files && req.files.thumbnail),
+      },
+    })
+
     res.json({
       success: true,
       message: '影片資訊已更新',

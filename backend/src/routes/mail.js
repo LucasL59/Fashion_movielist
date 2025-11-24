@@ -6,6 +6,8 @@
 
 import express from 'express'
 import { supabase } from '../config/supabase.js'
+import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { recordOperationLog } from '../services/operationLogService.js'
 
 const router = express.Router()
 
@@ -79,6 +81,8 @@ function getDefaultEmails(eventType, users = []) {
  * GET /api/mail-rules
  * 取得郵件規則與可選用戶
  */
+router.use(requireAuth, requireAdmin)
+
 router.get('/', async (req, res) => {
   try {
     const { eventType } = req.query
@@ -196,6 +200,19 @@ router.post('/', async (req, res) => {
 
     if (error) throw error
 
+    await recordOperationLog({
+      req,
+      action: 'mail.recipient.add',
+      resourceType: 'mail_rule',
+      resourceId: data.id,
+      description: `新增 ${eventType} 郵件收件者：${data.recipient_name}`,
+      metadata: {
+        eventType,
+        recipientEmail: data.recipient_email,
+        profileId: data.profile_id,
+      },
+    })
+
     res.status(201).json({
       success: true,
       data,
@@ -264,6 +281,18 @@ router.put('/:id', async (req, res) => {
 
     if (error) throw error
 
+    await recordOperationLog({
+      req,
+      action: 'mail.recipient.update',
+      resourceType: 'mail_rule',
+      resourceId: data.id,
+      description: `更新郵件收件者：${data.recipient_name}`,
+      metadata: {
+        recipientEmail: data.recipient_email,
+        profileId: data.profile_id,
+      },
+    })
+
     res.json({
       success: true,
       data,
@@ -285,12 +314,29 @@ router.delete('/:id', async (req, res) => {
   try {
     const { id } = req.params
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('mail_rules')
       .delete()
       .eq('id', id)
+      .select()
+      .maybeSingle()
 
     if (error) throw error
+
+    if (data) {
+      await recordOperationLog({
+        req,
+        action: 'mail.recipient.remove',
+        resourceType: 'mail_rule',
+        resourceId: data.id,
+        description: `移除郵件收件者：${data.recipient_name}`,
+        metadata: {
+          eventType: data.event_type,
+          recipientEmail: data.recipient_email,
+          profileId: data.profile_id,
+        },
+      })
+    }
 
     res.json({
       success: true,

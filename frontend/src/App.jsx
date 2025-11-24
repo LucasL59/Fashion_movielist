@@ -21,6 +21,7 @@ import VideoManagement from './pages/VideoManagement'
 import SelectionHistory from './pages/SelectionHistory'
 import UploadManagement from './pages/UploadManagement'
 import MailManagement from './pages/MailManagement'
+import OperationLogs from './pages/OperationLogs'
 import ResetPassword from './pages/ResetPassword'
 import DemoTransition from './pages/DemoTransition'
 
@@ -142,6 +143,15 @@ function AppRoutes() {
         <ProtectedRoute requiredRole="admin">
           <Layout>
             <MailManagement />
+          </Layout>
+        </ProtectedRoute>
+      } />
+
+      {/* 操作紀錄頁面（僅管理員） */}
+      <Route path="/logs" element={
+        <ProtectedRoute requiredRole="admin">
+          <Layout>
+            <OperationLogs />
           </Layout>
         </ProtectedRoute>
       } />

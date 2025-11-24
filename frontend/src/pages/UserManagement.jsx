@@ -10,7 +10,7 @@ import { Users, Shield, Upload as UploadIcon, User, CheckCircle, AlertCircle, Ke
 import { supabase } from '../lib/supabase'
 import Select from '../components/Select'
 import Modal from '../components/Modal'
-import { adminResetUserPassword } from '../lib/api'
+import { adminResetUserPassword, updateUserRole } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
 
 export default function UserManagement() {
@@ -94,13 +94,8 @@ export default function UserManagement() {
       setError('')
       setSuccess('')
       
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId)
-      
-      if (error) throw error
-      
+      await updateUserRole(userId, newRole)
+
       // 更新本地狀態
       setUsers(users.map(u => 
         u.id === userId ? { ...u, role: newRole } : u

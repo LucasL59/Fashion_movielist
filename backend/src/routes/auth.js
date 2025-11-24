@@ -6,6 +6,8 @@ import express from 'express'
 import crypto from 'crypto'
 import { supabase, supabaseAnon } from '../config/supabase.js'
 import { sendPasswordResetEmail, sendWelcomeEmail } from '../services/emailService.js'
+import { requireAuth, requireAdmin } from '../middleware/auth.js'
+import { recordOperationLog } from '../services/operationLogService.js'
 
 const router = express.Router()
 const TOKEN_EXPIRATION_MINUTES = 60
@@ -27,49 +29,6 @@ async function findProfileByEmail(email) {
 
   if (error) throw error
   return data
-}
-
-async function requireAuth(req, res, next) {
-  try {
-    const authHeader = req.headers.authorization || ''
-    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null
-
-    if (!token) {
-      return res.status(401).json({ error: 'Unauthorized', message: '缺少授權資訊' })
-    }
-
-    const { data, error } = await supabase.auth.getUser(token)
-    if (error || !data?.user) {
-      return res.status(401).json({ error: 'Unauthorized', message: '授權無效或已過期' })
-    }
-
-    req.authUser = data.user
-    next()
-  } catch (error) {
-    console.error('Auth 驗證失敗:', error)
-    return res.status(401).json({ error: 'Unauthorized', message: '授權驗證失敗' })
-  }
-}
-
-async function requireAdmin(req, res, next) {
-  try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', req.authUser.id)
-      .single()
-
-    if (error) throw error
-
-    if (data.role !== 'admin') {
-      return res.status(403).json({ error: 'Forbidden', message: '僅限管理員操作' })
-    }
-
-    next()
-  } catch (error) {
-    console.error('檢查管理員權限失敗:', error)
-    return res.status(500).json({ error: 'Internal Server Error', message: '無法驗證使用者權限' })
-  }
 }
 
 router.post('/register', async (req, res) => {
@@ -102,6 +61,18 @@ router.post('/register', async (req, res) => {
     }
 
     await sendWelcomeEmail({ to: email, name })
+
+    await recordOperationLog({
+      actor: {
+        id: data.user?.id,
+        name,
+        email,
+        role,
+      },
+      action: 'auth.register',
+      description: `${name} 註冊帳號`,
+      metadata: { role },
+    })
 
     return res.json({ success: true, userId: data.user?.id })
   } catch (error) {
@@ -203,6 +174,18 @@ router.post('/change-password', requireAuth, async (req, res) => {
     }
 
     await supabase.auth.admin.updateUserById(req.authUser.id, { password: newPassword })
+
+    await recordOperationLog({
+      req,
+      action: 'auth.change_password',
+      target: {
+        id: req.authUser.id,
+        name: req.authUserProfile?.name,
+        email: req.authUser.email,
+      },
+      description: '使用者更新自己的密碼',
+    })
+
     return res.json({ success: true, message: '密碼已更新' })
   } catch (error) {
     console.error('修改密碼失敗:', error)
@@ -218,6 +201,14 @@ router.post('/admin-reset-password', requireAuth, requireAdmin, async (req, res)
     }
 
     await supabase.auth.admin.updateUserById(userId, { password: newPassword })
+
+    await recordOperationLog({
+      req,
+      action: 'auth.admin_reset_password',
+      target: { id: userId },
+      description: '管理員重設用戶密碼',
+    })
+
     return res.json({ success: true, message: '已重設該用戶密碼' })
   } catch (error) {
     console.error('管理員重設密碼失敗:', error)

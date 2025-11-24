@@ -6,6 +6,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { recordOperationEvent } from '../lib/api'
 
 const AuthContext = createContext({})
 
@@ -103,8 +104,19 @@ export function AuthProvider({ children }) {
       email,
       password,
     })
-    
+
     if (error) throw error
+
+    try {
+      await recordOperationEvent({
+        action: 'auth.login',
+        description: '使用者登入系統',
+        metadata: { email },
+      })
+    } catch (logError) {
+      console.warn('登入紀錄寫入失敗:', logError)
+    }
+
     return data
   }
   
@@ -112,6 +124,16 @@ export function AuthProvider({ children }) {
    * 登出
    */
   async function signOut() {
+    try {
+      await recordOperationEvent({
+        action: 'auth.logout',
+        description: '使用者登出系統',
+        metadata: user ? { email: user.email, id: user.id } : {},
+      })
+    } catch (logError) {
+      console.warn('登出紀錄寫入失敗:', logError)
+    }
+
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     setUser(null)

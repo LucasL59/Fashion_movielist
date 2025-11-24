@@ -22,6 +22,9 @@ import reminderRoutes from './routes/reminders.js';
 import dashboardRoutes from './routes/dashboard.js';
 import mailRoutes from './routes/mail.js';
 import authRoutes from './routes/auth.js';
+import operationLogRoutes from './routes/operationLogs.js';
+import userRoutes from './routes/users.js';
+import systemSettingsRoutes from './routes/systemSettings.js';
 
 // 導入服務
 import { initializeReminderScheduler } from './services/reminderService.js';
@@ -111,6 +114,9 @@ app.use('/api/reminders', reminderRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/mail-rules', mailRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/operation-logs', operationLogRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/system-settings', systemSettingsRoutes);
 
 // ==================== 錯誤處理 ====================
 
