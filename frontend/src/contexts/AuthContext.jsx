@@ -17,6 +17,33 @@ export function useAuth() {
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+
+  function clearAuthStorage() {
+    if (typeof window === 'undefined') return
+    try {
+      const keysToClear = []
+      for (let i = 0; i < window.localStorage.length; i++) {
+        const key = window.localStorage.key(i)
+        if (!key) continue
+        if (key.startsWith('supabase.auth.') || key.includes('-auth-token')) {
+          keysToClear.push(key)
+        }
+      }
+      keysToClear.forEach(key => window.localStorage.removeItem(key))
+    } catch (error) {
+      console.warn('清除 Supabase token 失敗:', error)
+    }
+  }
+
+  async function resetSession() {
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      // 忽略登出錯誤，主要目標是清除 client 端暫存
+    } finally {
+      clearAuthStorage()
+    }
+  }
   
   useEffect(() => {
     // 檢查當前 session
@@ -24,7 +51,7 @@ export function AuthProvider({ children }) {
       if (error) {
         // 處理 Refresh Token 無效的情況
         console.warn('Session init error:', error.message)
-        supabase.auth.signOut()
+        resetSession()
         setLoading(false)
         return
       }
@@ -67,11 +94,16 @@ export function AuthProvider({ children }) {
         .eq('id', userId)
         .single()
       
-      if (error) throw error
-      
+      if (error) {
+        console.warn('獲取用戶資料失敗:', error)
+        await resetSession()
+        throw error
+      }
+
       setUser(data)
     } catch (error) {
       console.error('獲取用戶資料失敗:', error)
+      setUser(null)
     } finally {
       setLoading(false)
     }
@@ -100,12 +132,17 @@ export function AuthProvider({ children }) {
    * 登入
    */
   async function signIn(email, password) {
+    await resetSession()
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    if (error) throw error
+    if (error) {
+      await resetSession()
+      throw error
+    }
 
     try {
       await recordOperationEvent({
@@ -137,6 +174,7 @@ export function AuthProvider({ children }) {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     setUser(null)
+    clearAuthStorage()
   }
   
   /**
