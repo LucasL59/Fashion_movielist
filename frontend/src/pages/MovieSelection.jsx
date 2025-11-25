@@ -419,6 +419,21 @@ export default function MovieSelection() {
         </div>
       )}
       
+      {/* 說明提示 */}
+      {ownedVideos.length > 0 && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
+          <div className="bg-blue-100 text-blue-600 p-2 rounded-lg flex-shrink-0">
+            <AlertCircle className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-semibold text-blue-900 mb-1">選片說明</h4>
+            <p className="text-sm text-blue-700">
+              標示為 <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-semibold">已擁有</span> 的影片表示您已經選過，不需要重複選擇。若要下架這些影片，請在上方「目前擁有的片單」區塊中取消勾選。
+            </p>
+          </div>
+        </div>
+      )}
+      
       {/* 頂部控制列 - Glass Panel */}
       <div className="sticky top-24 z-30 glass-panel rounded-2xl p-4 mb-8 transition-all duration-300">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -524,48 +539,65 @@ export default function MovieSelection() {
                   video={video}
                   isSelected={selectedIds.includes(video.id)}
                   onToggle={handleToggle}
+                  isAlreadyOwned={ownedVideoIds.includes(video.id)}
                 />
               ))}
             </div>
           ) : (
             <div className="space-y-4 max-w-4xl mx-auto">
-              {displayedVideos.map((video) => (
-                <div
-                  key={video.id}
-                  onClick={() => handleToggle(video.id)}
-                  className={`group relative bg-white rounded-2xl p-4 flex gap-4 transition-all duration-200 hover:shadow-md cursor-pointer border ${
-                    selectedIds.includes(video.id)
-                      ? 'border-primary-500 ring-1 ring-primary-500 bg-primary-50/10'
-                      : 'border-gray-100'
-                  }`}
-                >
-                  <div className="w-24 h-36 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden">
-                    {video.thumbnail_url ? (
-                      <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <Film className="m-auto h-8 w-8 text-gray-300" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 py-1">
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="font-bold text-lg text-gray-900">{video.title}</h3>
-                        <p className="text-sm text-gray-500">{video.title_en}</p>
-                      </div>
-                      {selectedIds.includes(video.id) && (
-                        <div className="bg-primary-500 text-white rounded-full p-1">
-                          <CheckCircle className="h-5 w-5" />
-                        </div>
+              {displayedVideos.map((video) => {
+                const isOwned = ownedVideoIds.includes(video.id)
+                const isSelected = selectedIds.includes(video.id)
+                
+                return (
+                  <div
+                    key={video.id}
+                    onClick={() => handleToggle(video.id)}
+                    className={`group relative bg-white rounded-2xl p-4 flex gap-4 transition-all duration-200 hover:shadow-md cursor-pointer border ${
+                      isSelected
+                        ? isOwned
+                          ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/10'
+                          : 'border-primary-500 ring-1 ring-primary-500 bg-primary-50/10'
+                        : 'border-gray-100'
+                    }`}
+                  >
+                    <div className="w-24 h-36 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden">
+                      {video.thumbnail_url ? (
+                        <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Film className="m-auto h-8 w-8 text-gray-300" />
                       )}
                     </div>
-                    <p className="text-sm text-gray-600 mt-2 line-clamp-2">{video.description}</p>
-                    <div className="mt-auto pt-3 flex gap-3 text-xs text-gray-500">
-                      {video.duration && <span>{video.duration} 分鐘</span>}
-                      {video.rating && <span>{video.rating}</span>}
+                    <div className="flex-1 min-w-0 py-1">
+                      <div className="flex justify-between items-start">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-bold text-lg text-gray-900">{video.title}</h3>
+                            {isOwned && isSelected && (
+                              <span className="bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-semibold">
+                                已擁有
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-gray-500">{video.title_en}</p>
+                        </div>
+                        {isSelected && (
+                          <div className={`rounded-full p-1 ${
+                            isOwned ? 'bg-blue-500 text-white' : 'bg-primary-500 text-white'
+                          }`}>
+                            <CheckCircle className="h-5 w-5" />
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">{video.description}</p>
+                      <div className="mt-auto pt-3 flex gap-3 text-xs text-gray-500">
+                        {video.duration && <span>{video.duration} 分鐘</span>}
+                        {video.rating && <span>{video.rating}</span>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>

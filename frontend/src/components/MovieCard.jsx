@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import { Check, Clock, Star, Film, Edit, Play } from 'lucide-react'
 
-export default function MovieCard({ video, isSelected, onToggle, onEdit, showEdit = false }) {
+export default function MovieCard({ video, isSelected, onToggle, onEdit, showEdit = false, isAlreadyOwned = false }) {
   const selected = isSelected
   const [imageError, setImageError] = useState(false)
   
@@ -15,7 +15,9 @@ export default function MovieCard({ video, isSelected, onToggle, onEdit, showEdi
     <div 
       className={`group relative bg-white rounded-3xl overflow-hidden transition-all duration-300 ${
         selected 
-          ? 'ring-4 ring-primary-500/30 shadow-lg scale-[1.02]' 
+          ? isAlreadyOwned
+            ? 'ring-4 ring-blue-500/30 shadow-lg scale-[1.02]' 
+            : 'ring-4 ring-primary-500/30 shadow-lg scale-[1.02]'
           : 'hover:shadow-medium hover:-translate-y-1 border border-gray-100'
       } ${onToggle ? 'cursor-pointer' : ''}`}
       onClick={() => onToggle && onToggle(video.id)}
@@ -40,10 +42,21 @@ export default function MovieCard({ video, isSelected, onToggle, onEdit, showEdi
         
         {/* 選中狀態遮罩 */}
         {selected && (
-          <div className="absolute inset-0 bg-primary-900/20 backdrop-blur-[1px] flex items-center justify-center animate-fade-in">
-            <div className="bg-white text-primary-600 rounded-full p-3 shadow-lg transform scale-110">
+          <div className={`absolute inset-0 backdrop-blur-[1px] flex items-center justify-center animate-fade-in ${
+            isAlreadyOwned ? 'bg-blue-900/20' : 'bg-primary-900/20'
+          }`}>
+            <div className={`rounded-full p-3 shadow-lg transform scale-110 ${
+              isAlreadyOwned ? 'bg-white text-blue-600' : 'bg-white text-primary-600'
+            }`}>
               <Check className="h-8 w-8 stroke-[3]" />
             </div>
+          </div>
+        )}
+        
+        {/* 已擁有標記 */}
+        {isAlreadyOwned && selected && (
+          <div className="absolute top-3 right-3 bg-blue-600 text-white text-xs px-2 py-1 rounded-full font-semibold shadow-lg">
+            已擁有
           </div>
         )}
         
