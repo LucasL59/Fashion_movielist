@@ -5,10 +5,23 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Calendar, Film, Search, Loader, AlertCircle, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, CheckCircle, X } from 'lucide-react'
+import {
+  Calendar,
+  Film,
+  Search,
+  Loader,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  PlusCircle,
+  MinusCircle,
+  CheckCircle
+} from 'lucide-react'
 import { getMonthlySelectionSummary, getAvailableMonths } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
 import Select from '../components/Select'
+import SelectionDiffSection from '../components/SelectionDiffSection'
 
 export default function AdminSelectionSummary() {
   const { showToast } = useToast()
@@ -65,6 +78,17 @@ export default function AdminSelectionSummary() {
     if (!monthStr) return ''
     const [year, month] = monthStr.split('-')
     return `${year}年${month}月`
+  }
+
+  function formatDateTime(dateString) {
+    if (!dateString) return ''
+    return new Date(dateString).toLocaleString('zh-TW', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
   
   function toggleExpand(customerId) {
@@ -216,26 +240,6 @@ export default function AdminSelectionSummary() {
                         </span>
                       )}
                     </div>
-                    
-                    {/* 數量摘要 */}
-                    <div className="hidden sm:flex items-center gap-4 text-sm">
-                      {hasPrevious && (
-                        <div className="text-center">
-                          <div className="font-semibold text-gray-700">
-                            {summary.previousSelection.videoCount}
-                          </div>
-                          <div className="text-xs text-gray-500">上月</div>
-                        </div>
-                      )}
-                      {hasCurrent && (
-                        <div className="text-center">
-                          <div className="font-semibold text-gray-900">
-                            {summary.currentSelection.videoCount}
-                          </div>
-                          <div className="text-xs text-gray-500">本月</div>
-                        </div>
-                      )}
-                    </div>
                   </div>
                   
                   {/* 展開按鈕 */}
@@ -251,159 +255,107 @@ export default function AdminSelectionSummary() {
                 {/* 展開內容 */}
                 {isExpanded && (
                   <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
-                    {/* 異動摘要 */}
-                    {hasPrevious && hasCurrent && (
-                      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-                        <h4 className="font-semibold text-amber-900 mb-3 flex items-center gap-2">
-                          <AlertCircle className="h-5 w-5" />
-                          異動摘要
-                        </h4>
-                        <div className="grid grid-cols-3 gap-4">
-                          <div className="text-center">
-                            <div className="flex items-center justify-center gap-1 text-red-600 mb-1">
-                              <TrendingDown className="h-4 w-4" />
-                              <span className="text-xl font-bold">{summary.diff.removedCount}</span>
+                    {hasCurrent ? (
+                      <>
+                        <div className="rounded-2xl border border-gray-100 bg-white/70 p-5 space-y-4">
+                          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div>
+                              <p className="text-xs uppercase tracking-[0.2em] text-gray-500">{summary.customer.email}</p>
+                              <h4 className="text-xl font-semibold text-gray-900">
+                                {formatMonth(selectedMonth)} 片單
+                              </h4>
+                              {hasPrevious && (
+                                <p className="text-sm text-gray-500">
+                                  與 {formatMonth(summaryData?.prevMonth)} 相比
+                                </p>
+                              )}
                             </div>
-                            <div className="text-xs text-gray-600">下架</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="flex items-center justify-center gap-1 text-green-600 mb-1">
-                              <TrendingUp className="h-4 w-4" />
-                              <span className="text-xl font-bold">{summary.diff.addedCount}</span>
+                            <div className="grid w-full gap-3 md:max-w-xl md:grid-cols-3">
+                              <StatCard
+                                icon={Layers}
+                                label="當月片單"
+                                value={`${summary.currentSelection.videoCount || 0} 部`}
+                              />
+                              <StatCard
+                                icon={PlusCircle}
+                                accent="green"
+                                label="本月新增"
+                                value={`${summary.diff?.addedCount || 0} 部`}
+                              />
+                              <StatCard
+                                icon={MinusCircle}
+                                accent="red"
+                                label="本月下架"
+                                value={`${summary.diff?.removedCount || 0} 部`}
+                              />
                             </div>
-                            <div className="text-xs text-gray-600">新增</div>
                           </div>
-                          <div className="text-center">
-                            <div className="flex items-center justify-center gap-1 text-gray-600 mb-1">
-                              <Minus className="h-4 w-4" />
-                              <span className="text-xl font-bold">{summary.diff.keptCount}</span>
-                            </div>
-                            <div className="text-xs text-gray-600">保留</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* 本月選擇 */}
-                    {hasCurrent && (
-                      <div>
-                        <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                          <div className="w-2 h-2 bg-primary-500 rounded-full"></div>
-                          本月選擇 ({summary.currentSelection.videoCount} 部)
                           {summary.currentSelection.submittedAt && (
-                            <span className="text-xs text-gray-500 font-normal ml-2">
-                              提交於 {new Date(summary.currentSelection.submittedAt).toLocaleString('zh-TW')}
-                            </span>
+                            <p className="text-xs text-gray-500">
+                              最後提交：{formatDateTime(summary.currentSelection.submittedAt)}
+                            </p>
                           )}
-                        </h4>
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {summary.currentSelection.videos.map((video, index) => {
-                            const isAdded = summary.diff.added.some(v => v.id === video.id)
-                            return (
-                              <div 
-                                key={video.id} 
-                                className={`flex items-center gap-3 p-3 rounded-lg border ${
-                                  isAdded 
-                                    ? 'bg-green-50 border-green-200' 
-                                    : 'bg-gray-50 border-gray-200'
-                                }`}
-                              >
-                                <div className="text-sm text-gray-500 font-medium w-8">
-                                  {index + 1}.
-                                </div>
-                                <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                        </div>
+                        <div className="space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                                <Film className="h-4 w-4" />
+                              </span>
+                              當月擁有的片單
+                            </h5>
+                            <span className="text-sm text-gray-500">
+                              共 {summary.currentSelection.videoCount || 0} 部
+                            </span>
+                          </div>
+                          {summary.currentSelection.videos?.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                              {summary.currentSelection.videos.map((video) => (
+                                <div
+                                  key={video.id}
+                                  className="group relative aspect-[2/3] rounded-2xl border border-gray-100 bg-gray-50 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
+                                >
                                   {video.thumbnail_url ? (
-                                    <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                                    <img src={video.thumbnail_url} alt={video.title} className="h-full w-full rounded-2xl object-cover" />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                      <Film className="h-6 w-6 text-gray-400" />
+                                    <div className="flex h-full w-full items-center justify-center">
+                                      <Film className="h-8 w-8 text-gray-400" />
                                     </div>
                                   )}
+                                  <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from黑/80 to-transparent p-3">
+                                    <p className="text-sm font-semibold text-white line-clamp-2">{video.title}</p>
+                                    {video.title_en && (
+                                      <p className="text-xs text-white/70 line-clamp-1">{video.title_en}</p>
+                                    )}
+                                  </div>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-semibold text-sm text-gray-900">{video.title}</div>
-                                  {video.title_en && (
-                                    <div className="text-xs text-gray-500">{video.title_en}</div>
-                                  )}
-                                </div>
-                                {isAdded && (
-                                  <span className="text-xs bg-green-600 text-white px-2 py-1 rounded-full flex-shrink-0">
-                                    新增
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )}
-                    
-                    {/* 上月選擇 */}
-                    {hasPrevious && (
-                      <div>
-                        <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                          <div className="w-2 h-2 bg-amber-500 rounded-full"></div>
-                          上月選擇 ({summary.previousSelection.videoCount} 部)
-                          {summary.previousSelection.submittedAt && (
-                            <span className="text-xs text-gray-500 font-normal ml-2">
-                              提交於 {new Date(summary.previousSelection.submittedAt).toLocaleString('zh-TW')}
-                            </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-gray-500">
+                              此月份尚未選擇任何影片
+                            </div>
                           )}
-                        </h4>
-                        <div className="space-y-2 max-h-64 overflow-y-auto">
-                          {summary.previousSelection.videos.map((video, index) => {
-                            const isRemoved = summary.diff.removed.some(v => v.id === video.id)
-                            const isKept = summary.diff.kept.some(v => v.id === video.id)
-                            return (
-                              <div 
-                                key={video.id} 
-                                className={`flex items-center gap-3 p-3 rounded-lg border ${
-                                  isRemoved 
-                                    ? 'bg-red-50 border-red-200' 
-                                    : 'bg-gray-50 border-gray-200'
-                                }`}
-                              >
-                                <div className="text-sm text-gray-500 font-medium w-8">
-                                  {index + 1}.
-                                </div>
-                                <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                                  {video.thumbnail_url ? (
-                                    <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center">
-                                      <Film className="h-6 w-6 text-gray-400" />
-                                    </div>
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-semibold text-sm text-gray-900">{video.title}</div>
-                                  {video.title_en && (
-                                    <div className="text-xs text-gray-500">{video.title_en}</div>
-                                  )}
-                                </div>
-                                {isRemoved && (
-                                  <span className="text-xs bg-red-600 text-white px-2 py-1 rounded-full flex-shrink-0 flex items-center gap-1">
-                                    <X className="h-3 w-3" />
-                                    已下架
-                                  </span>
-                                )}
-                                {isKept && (
-                                  <span className="text-xs bg-gray-500 text-white px-2 py-1 rounded-full flex-shrink-0">
-                                    保留
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          })}
                         </div>
-                      </div>
-                    )}
-                    
-                    {/* 無選擇提示 */}
-                    {!hasCurrent && !hasPrevious && (
+                        <div className="grid gap-6 lg:grid-cols-2">
+                          <SelectionDiffSection
+                            title="本月新增的片單"
+                            highlightColor="green"
+                            videos={summary.diff?.added || []}
+                            emptyText="本月未新增影片"
+                          />
+                          <SelectionDiffSection
+                            title="本月下架的片單"
+                            highlightColor="red"
+                            videos={summary.diff?.removed || []}
+                            emptyText="本月沒有下架影片"
+                          />
+                        </div>
+                      </>
+                    ) : (
                       <div className="text-center py-8 text-gray-500">
                         <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                        <p>此客戶尚未提交任何選擇</p>
+                        <p>此客戶尚未提交 {formatMonth(selectedMonth)} 的片單</p>
                       </div>
                     )}
                   </div>
@@ -413,6 +365,28 @@ export default function AdminSelectionSummary() {
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+function StatCard({ icon: Icon, label, value, accent = 'primary' }) {
+  const accentStyles = {
+    primary: 'text-primary-600',
+    green: 'text-green-600',
+    red: 'text-red-600'
+  }
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white p-4">
+      <div className="flex items-center gap-3">
+        <span className={`rounded-full bg-gray-50 p-2 shadow-sm ${accentStyles[accent]}`}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <div>
+          <p className="text-xs uppercase tracking-wide text-gray-500">{label}</p>
+          <p className="text-lg font-semibold text-gray-900">{value}</p>
+        </div>
+      </div>
     </div>
   )
 }

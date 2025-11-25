@@ -54,9 +54,11 @@ export default function MovieCard({ video, isSelected, onToggle, onEdit, showEdi
         )}
         
         {/* 已擁有標記 */}
-        {isAlreadyOwned && selected && (
-          <div className="absolute top-3 right-3 bg-blue-600 text-white text-xs px-2 py-1 rounded-full font-semibold shadow-lg">
-            已擁有
+        {isAlreadyOwned && (
+          <div className={`absolute top-3 ${showEdit ? 'right-14' : 'right-3'}`}>
+            <span className="bg-blue-600/95 backdrop-blur text-white text-xs px-2 py-0.5 rounded-full font-semibold shadow-lg tracking-wide">
+              已擁有
+            </span>
           </div>
         )}
         

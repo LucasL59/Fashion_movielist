@@ -6,8 +6,18 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { History, Calendar, Film, Loader, AlertCircle } from 'lucide-react'
-import { getUserSelections } from '../lib/api'
+import {
+  History,
+  Calendar,
+  Film,
+  Loader,
+  AlertCircle,
+  Layers,
+  PlusCircle,
+  MinusCircle
+} from 'lucide-react'
+import Select from '../components/Select'
+import SelectionDiffSection from '../components/SelectionDiffSection'
 import { supabase } from '../lib/supabase'
 
 export default function SelectionHistory() {
@@ -15,18 +25,19 @@ export default function SelectionHistory() {
   const [selections, setSelections] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  
+  const [selectedMonthKey, setSelectedMonthKey] = useState('')
+
   useEffect(() => {
     if (user) {
       loadSelections()
     }
   }, [user])
-  
+
   async function loadSelections() {
     try {
       setLoading(true)
       setError('')
-      
+
       // 獲取用戶的選擇記錄
       const { data: selectionsData, error: selectionsError } = await supabase
         .from('selections')
@@ -41,26 +52,27 @@ export default function SelectionHistory() {
         `)
         .eq('user_id', user.id)
         .order('created_at', { ascending: false })
-      
+
       if (selectionsError) throw selectionsError
-      
+
       // 對每個選擇，獲取影片詳情
+      const videoCache = new Map()
       const selectionsWithVideos = await Promise.all(
         (selectionsData || []).map(async (selection) => {
           const videoIds = selection.video_ids || []
-          
+
           if (videoIds.length === 0) {
             return {
               ...selection,
               videos: []
             }
           }
-          
+
           const { data: videos, error: videosError } = await supabase
             .from('videos')
             .select('id, title, title_en, thumbnail_url')
             .in('id', videoIds)
-          
+
           if (videosError) {
             console.error('載入影片失敗:', videosError)
             return {
@@ -68,15 +80,66 @@ export default function SelectionHistory() {
               videos: []
             }
           }
-          
+
+          videos?.forEach(video => {
+            if (video?.id) {
+              videoCache.set(video.id, video)
+            }
+          })
+
           return {
             ...selection,
             videos: videos || []
           }
         })
       )
-      
-      setSelections(selectionsWithVideos)
+
+      const sortedSelections = [...(selectionsWithVideos || [])].sort((a, b) => {
+        const monthA = a?.batches?.month || ''
+        const monthB = b?.batches?.month || ''
+        if (monthA && monthB && monthA !== monthB) {
+          return monthB.localeCompare(monthA)
+        }
+        return new Date(b.created_at) - new Date(a.created_at)
+      })
+
+      const enhancedSelections = sortedSelections.map((selection, index) => {
+        const prevSelection = sortedSelections[index + 1]
+        const currentVideoIds = selection.video_ids || []
+        const prevVideoIds = prevSelection?.video_ids || []
+        const addedIds = currentVideoIds.filter(id => !prevVideoIds.includes(id))
+        const removedIds = prevVideoIds.filter(id => !currentVideoIds.includes(id))
+
+        const attachVideoMeta = (videoId) => {
+          const fromCache = videoCache.get(videoId)
+          if (fromCache) return fromCache
+          const fallback = prevSelection?.videos?.find(video => video.id === videoId)
+          if (fallback) return fallback
+          return {
+            id: videoId,
+            title: '已下架影片',
+            title_en: '',
+            thumbnail_url: ''
+          }
+        }
+
+        const monthKey = selection?.batches?.month || selection.id
+
+        return {
+          ...selection,
+          monthKey,
+          diff: {
+            added: addedIds.map(attachVideoMeta),
+            removed: removedIds.map(attachVideoMeta),
+            addedCount: addedIds.length,
+            removedCount: removedIds.length,
+            previousMonth: prevSelection?.batches?.month || null
+          }
+        }
+      })
+
+      setSelections(enhancedSelections)
+      setSelectedMonthKey(prev => prev || enhancedSelections[0]?.monthKey || '')
     } catch (error) {
       console.error('載入選擇記錄失敗:', error)
       setError('載入選擇記錄失敗')
@@ -84,7 +147,7 @@ export default function SelectionHistory() {
       setLoading(false)
     }
   }
-  
+
   function formatDate(dateString) {
     const date = new Date(dateString)
     return date.toLocaleDateString('zh-TW', {
@@ -95,13 +158,26 @@ export default function SelectionHistory() {
       minute: '2-digit'
     })
   }
-  
+
   function formatMonth(monthStr) {
     if (!monthStr) return ''
     const [year, month] = monthStr.split('-')
     return `${year}年${parseInt(month)}月`
   }
-  
+
+  const monthOptions = selections.map(selection => ({
+    key: selection.monthKey,
+    label: formatMonth(selection?.batches?.month) || '未命名月份'
+  }))
+
+  const activeSelection = selections.find(selection => selection.monthKey === selectedMonthKey) || selections[0]
+
+  useEffect(() => {
+    if (!selectedMonthKey && selections.length > 0) {
+      setSelectedMonthKey(selections[0].monthKey)
+    }
+  }, [selectedMonthKey, selections])
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -126,7 +202,6 @@ export default function SelectionHistory() {
         </div>
       )}
       
-      {/* 選擇記錄列表 */}
       {selections.length === 0 ? (
         <div className="card text-center py-12">
           <History className="h-16 w-16 text-gray-400 mx-auto mb-4" />
@@ -137,66 +212,113 @@ export default function SelectionHistory() {
         </div>
       ) : (
         <div className="space-y-6">
-          {selections.map((selection) => (
-            <div key={selection.id} className="card">
-              {/* 標題 */}
-              <div className="flex items-start justify-between mb-4 pb-4 border-b border-gray-200">
-                <div>
-                  <h3 className="text-lg font-bold text-gray-900">
-                    {selection.batches?.name || '未知批次'}
-                  </h3>
-                  {selection.batches?.month && (
-                    <p className="text-sm text-gray-500 mt-1">
-                      <Calendar className="h-4 w-4 inline mr-1" />
-                      {formatMonth(selection.batches.month)}
-                    </p>
-                  )}
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">提交時間</p>
-                  <p className="text-sm font-medium text-gray-900">
-                    {formatDate(selection.created_at)}
+          <div className="card space-y-6">
+            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm text-gray-500">選擇您想查看的月份</p>
+                <h2 className="text-2xl font-semibold text-gray-900">
+                  {formatMonth(activeSelection?.batches?.month)}
+                </h2>
+                {activeSelection?.diff?.previousMonth && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    與 {formatMonth(activeSelection.diff.previousMonth)} 比較
                   </p>
-                </div>
+                )}
               </div>
-              
-              {/* 統計 */}
-              <div className="mb-4">
-                <div className="inline-flex items-center gap-2 px-3 py-1 bg-primary-50 text-primary-700 rounded-full">
-                  <Film className="h-4 w-4" />
-                  <span className="text-sm font-medium">
-                    已選擇 {selection.videos?.length || 0} 部影片
+              <div className="w-full md:w-60">
+                <label className="text-xs font-medium text-gray-500 block mb-1">
+                  月份
+                </label>
+                <Select
+                  value={selectedMonthKey}
+                  onChange={(event) => setSelectedMonthKey(event.target.value)}
+                  options={monthOptions.map(option => ({ value: option.key, label: option.label }))}
+                  placeholder="選擇月份"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-white p-2 shadow-sm">
+                    <Layers className="h-4 w-4 text-primary-600" />
                   </span>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-gray-500">當月片單</p>
+                    <p className="text-xl font-semibold text-gray-900">
+                      {activeSelection?.videos?.length || 0} 部
+                    </p>
+                  </div>
                 </div>
               </div>
-              
-              {/* 影片列表 */}
-              {selection.videos && selection.videos.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {selection.videos.map((video) => (
+              <div className="rounded-2xl border border-green-100 bg-green-50 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-white p-2 shadow-sm">
+                    <PlusCircle className="h-4 w-4 text-green-600" />
+                  </span>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-green-600">本月新增</p>
+                    <p className="text-xl font-semibold text-green-700">
+                      {activeSelection?.diff?.addedCount || 0} 部
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="rounded-full bg-white p-2 shadow-sm">
+                    <MinusCircle className="h-4 w-4 text-red-600" />
+                  </span>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-red-600">本月下架</p>
+                    <p className="text-xl font-semibold text-red-700">
+                      {activeSelection?.diff?.removedCount || 0} 部
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-600">
+                    <Film className="h-4 w-4" />
+                  </span>
+                  當月擁有的片單
+                </h3>
+                {activeSelection?.created_at && (
+                  <p className="text-sm text-gray-500">
+                    提交於 {formatDate(activeSelection.created_at)}
+                  </p>
+                )}
+              </div>
+
+              {activeSelection?.videos?.length > 0 ? (
+                <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                  {activeSelection.videos.map((video) => (
                     <div
                       key={video.id}
-                      className="group relative aspect-[2/3] bg-gray-100 rounded-lg overflow-hidden"
+                      className="group relative aspect-[2/3] rounded-2xl border border-gray-100 bg-gray-50 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
                     >
                       {video.thumbnail_url ? (
                         <img
                           src={video.thumbnail_url}
                           alt={video.title}
-                          className="w-full h-full object-cover"
+                          className="h-full w-full rounded-2xl object-cover"
                         />
                       ) : (
-                        <div className="w-full h-full flex items-center justify-center">
+                        <div className="flex h-full w-full items-center justify-center">
                           <Film className="h-8 w-8 text-gray-400" />
                         </div>
                       )}
-                      
-                      {/* 標題覆蓋層 */}
-                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-                        <p className="text-white text-xs font-medium line-clamp-2">
+                      <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent p-3">
+                        <p className="text-sm font-semibold text-white line-clamp-2">
                           {video.title}
                         </p>
                         {video.title_en && (
-                          <p className="text-white/70 text-xs line-clamp-1 mt-0.5">
+                          <p className="text-xs text-white/70 line-clamp-1">
                             {video.title_en}
                           </p>
                         )}
@@ -204,12 +326,59 @@ export default function SelectionHistory() {
                     </div>
                   ))}
                 </div>
+              ) : (
+                <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-gray-500">
+                  此月份尚未選擇任何影片
+                </div>
               )}
             </div>
-          ))}
+
+            <div className="grid gap-6 lg:grid-cols-2">
+              <SelectionDiffSection
+                title="本月新增的片單"
+                highlightColor="green"
+                videos={activeSelection?.diff?.added || []}
+                emptyText="本月未新增影片"
+              />
+              <SelectionDiffSection
+                title="本月下架的片單"
+                highlightColor="red"
+                videos={activeSelection?.diff?.removed || []}
+                emptyText="本月沒有下架影片"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-gray-900">所有月份一覽</h3>
+            <div className="space-y-4">
+              {selections.map((selection) => (
+                <div key={selection.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm text-gray-500">{selection.batches?.name || '未知批次'}</p>
+                      <p className="text-base font-semibold text-gray-900">
+                        {formatMonth(selection.batches?.month)}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-sm">
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-700">
+                        總片單 {selection.videos?.length || 0}
+                      </span>
+                      <span className="rounded-full bg-green-50 px-3 py-1 text-green-700">
+                        +{selection.diff?.addedCount || 0}
+                      </span>
+                      <span className="rounded-full bg-red-50 px-3 py-1 text-red-700">
+                        -{selection.diff?.removedCount || 0}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
     </div>
   )
 }
-

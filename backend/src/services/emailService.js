@@ -137,7 +137,8 @@ async function getStaffRecipients(excludeIds = []) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, name');
+      .select('id, email, name, role')
+      .in('role', ['admin', 'uploader']); // 只查詢管理員和上傳者
 
     if (error) throw error;
     return (data || [])
@@ -151,30 +152,40 @@ async function getStaffRecipients(excludeIds = []) {
 
 async function getAdminRecipients(excludeIds = []) {
   try {
+    console.log('🔍 [getAdminRecipients] 開始查詢管理員，排除 ID:', excludeIds);
+    
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, email, name')
+      .select('id, email, name, role')
       .eq('role', 'admin');
 
     if (error) throw error;
+    
+    console.log('📊 [getAdminRecipients] 查詢到的管理員:', data);
 
     const admins = (data || [])
       .filter((profile) => profile.email)
       .filter((profile) => !excludeIds.includes(profile.id))
       .map((profile) => profile.email);
+    
+    console.log('✅ [getAdminRecipients] 過濾後的管理員郵箱:', admins);
 
     if (admins.length > 0) {
       return admins;
     }
 
-    return process.env.ADMIN_EMAIL
+    console.log('⚠️ [getAdminRecipients] 沒有找到管理員，使用環境變數 ADMIN_EMAIL');
+    const fallbackEmails = process.env.ADMIN_EMAIL
       ? process.env.ADMIN_EMAIL
           .split(',')
           .map((email) => email.trim())
           .filter(Boolean)
       : [];
+    
+    console.log('📧 [getAdminRecipients] 環境變數郵箱:', fallbackEmails);
+    return fallbackEmails;
   } catch (error) {
-    console.error('取得管理員收件人失敗，將回退至環境變數:', error);
+    console.error('❌ [getAdminRecipients] 查詢管理員失敗，將回退至環境變數:', error);
     return process.env.ADMIN_EMAIL
       ? process.env.ADMIN_EMAIL
           .split(',')
@@ -397,17 +408,25 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       .maybeSingle();
 
     const uploaderProfile = await getUploaderByBatch(batch);
+    console.log('📤 [notifyAdminCustomerSelection] 上傳者資料:', uploaderProfile);
 
     const uploaderIdToExclude = uploaderProfile?.id ? [uploaderProfile.id] : []
     const adminRecipients = await getAdminRecipients(uploaderIdToExclude)
+    console.log('👥 [notifyAdminCustomerSelection] 管理員收件人:', adminRecipients);
+    
+    const mailRuleRecipients = await getMailRecipientsByEvent(MAIL_EVENT_TYPES.SELECTION_SUBMITTED);
+    console.log('📧 [notifyAdminCustomerSelection] 郵件規則收件人:', mailRuleRecipients);
+    
     const recipients = mergeRecipients(
       adminRecipients,
       uploaderProfile?.email,
-      await getMailRecipientsByEvent(MAIL_EVENT_TYPES.SELECTION_SUBMITTED)
+      mailRuleRecipients
     );
+    
+    console.log('✉️ [notifyAdminCustomerSelection] 最終收件人列表:', recipients);
 
     if (recipients.length === 0) {
-      console.warn('找不到任何選擇通知收件人，已跳過寄信');
+      console.warn('⚠️ [notifyAdminCustomerSelection] 找不到任何選擇通知收件人，已跳過寄信');
       return;
     }
     
