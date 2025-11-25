@@ -69,6 +69,10 @@ export default function MovieSelection() {
   
   async function loadCurrentAndOwnedSelection() {
     try {
+      console.log('🔍 開始載入選擇資料...')
+      console.log('👤 User ID:', user.id)
+      console.log('📦 Batch ID:', batch.id)
+      
       // 載入當月已選擇的影片
       const { data, error } = await supabase
         .from('selections')
@@ -77,12 +81,17 @@ export default function MovieSelection() {
         .eq('batch_id', batch.id)
         .order('created_at', { ascending: false })
         .limit(1)
-        .single()
       
-      if (error && error.code !== 'PGRST116') throw error
+      if (error && error.code !== 'PGRST116') {
+        console.error('❌ 載入當月選擇錯誤:', error)
+        throw error
+      }
       
-      if (data && data.video_ids) {
-        setSelectedIds(data.video_ids)
+      if (data && data.length > 0 && data[0].video_ids) {
+        console.log('✅ 找到當月選擇:', data[0].video_ids.length, '部')
+        setSelectedIds(data[0].video_ids)
+      } else {
+        console.log('ℹ️ 當月尚未選擇任何影片')
       }
       
       // 載入目前擁有的所有片單
@@ -91,35 +100,59 @@ export default function MovieSelection() {
       // 載入上月選擇（用於郵件通知差異）
       await loadPreviousMonthSelection()
     } catch (error) {
-      console.error('載入選擇失敗:', error)
+      console.error('❌ 載入選擇失敗:', error)
     }
   }
   
   async function loadOwnedVideos() {
-    if (!user || !user.id) return
+    if (!user || !user.id) {
+      console.log('⚠️ 無法載入擁有影片：user 或 user.id 不存在')
+      return
+    }
     
     try {
       setLoadingOwned(true)
+      console.log('🔍 開始載入目前擁有的影片...')
+      console.log('👤 User ID:', user.id)
+      
       const response = await getCurrentOwnedVideos(user.id)
+      
+      console.log('📡 API 回應:', response)
       
       if (response.success && response.data) {
         const { ownedVideos: owned, ownedVideoIds: ownedIds } = response.data
+        
+        console.log('✅ 擁有的影片:', {
+          count: owned?.length || 0,
+          videoIds: ownedIds
+        })
         
         if (owned && owned.length > 0) {
           setOwnedVideos(owned)
           setOwnedVideoIds(ownedIds)
           
+          console.log('💾 已設定 ownedVideoIds:', ownedIds)
+          
           // 預選目前擁有的影片
           setSelectedIds(prev => {
             const combined = [...new Set([...prev, ...ownedIds])]
+            console.log('🔄 更新 selectedIds:', {
+              previous: prev.length,
+              owned: ownedIds.length,
+              combined: combined.length
+            })
             return combined
           })
           
           console.log(`📋 載入目前擁有: ${owned.length} 部影片`)
+        } else {
+          console.log('ℹ️ 目前沒有擁有任何影片')
         }
+      } else {
+        console.log('⚠️ API 回應格式異常:', response)
       }
     } catch (error) {
-      console.error('載入擁有影片失敗:', error)
+      console.error('❌ 載入擁有影片失敗:', error)
     } finally {
       setLoadingOwned(false)
     }
@@ -293,16 +326,29 @@ export default function MovieSelection() {
   const addedVideos = videos.filter(v => {
     const isSelected = selectedIds.includes(v.id)
     const isAlreadyOwned = ownedVideoIds.includes(v.id)
-    return isSelected && !isAlreadyOwned
+    const result = isSelected && !isAlreadyOwned
+    
+    if (isSelected && isAlreadyOwned) {
+      console.log(`🔵 ${v.title} 已擁有且被選中 (應該在保留中)`)
+    }
+    if (result) {
+      console.log(`🟢 ${v.title} 是新增的影片`)
+    }
+    
+    return result
   })
   
   console.log('📊 差異計算:', {
     ownedVideoIds: ownedVideoIds.length,
+    ownedVideoIdsArray: ownedVideoIds,
     selectedIds: selectedIds.length,
     removed: removedVideos.length,
     kept: keptVideos.length,
     added: addedVideos.length
   })
+  
+  console.log('🎬 目前擁有的影片 ID:', ownedVideoIds)
+  console.log('✅ 已選擇的影片 ID:', selectedIds)
 
   return (
     <div className="space-y-8 pb-24">

@@ -360,8 +360,11 @@ router.get('/current-owned/:userId', requireAuth, async (req, res) => {
     const authUser = req.authUser;
     const currentUserId = authProfile?.id || authUser?.id;
     
+    console.log('🔍 [current-owned] 收到請求:', { userId, currentUserId });
+    
     // 權限檢查：只能查詢自己的，或者管理員可以查詢所有
     if (currentUserId !== userId && authProfile?.role !== 'admin' && authProfile?.role !== 'uploader') {
+      console.log('❌ [current-owned] 權限不足');
       return res.status(403).json({ 
         error: 'Forbidden',
         message: '無權限查詢此用戶的資料' 
@@ -377,7 +380,10 @@ router.get('/current-owned/:userId', requireAuth, async (req, res) => {
     
     if (selectionsError) throw selectionsError;
     
+    console.log(`📊 [current-owned] 找到 ${selections?.length || 0} 筆選擇記錄`);
+    
     if (!selections || selections.length === 0) {
+      console.log('ℹ️ [current-owned] 用戶沒有任何選擇記錄');
       return res.json({
         success: true,
         data: {
@@ -391,13 +397,18 @@ router.get('/current-owned/:userId', requireAuth, async (req, res) => {
     const allVideoIds = new Set();
     selections.forEach(selection => {
       if (selection.video_ids && Array.isArray(selection.video_ids)) {
+        console.log(`  - 選擇記錄包含 ${selection.video_ids.length} 部影片`);
         selection.video_ids.forEach(id => allVideoIds.add(id));
       }
     });
     
     const uniqueVideoIds = Array.from(allVideoIds);
     
+    console.log(`🎬 [current-owned] 去重後共 ${uniqueVideoIds.length} 部影片`);
+    console.log(`📝 [current-owned] 影片 IDs:`, uniqueVideoIds);
+    
     if (uniqueVideoIds.length === 0) {
+      console.log('⚠️ [current-owned] 去重後沒有影片');
       return res.json({
         success: true,
         data: {
@@ -415,7 +426,7 @@ router.get('/current-owned/:userId', requireAuth, async (req, res) => {
     
     if (videosError) throw videosError;
     
-    console.log(`📋 用戶 ${userId} 目前擁有 ${videos.length} 部影片`);
+    console.log(`✅ [current-owned] 成功獲取 ${videos?.length || 0} 部影片詳情`);
     
     res.json({
       success: true,
@@ -426,7 +437,7 @@ router.get('/current-owned/:userId', requireAuth, async (req, res) => {
     });
     
   } catch (error) {
-    console.error('獲取擁有影片失敗:', error);
+    console.error('❌ [current-owned] 獲取擁有影片失敗:', error);
     res.status(500).json({
       error: 'Internal Server Error',
       message: error.message || '獲取擁有影片失敗'
