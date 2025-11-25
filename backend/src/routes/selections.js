@@ -349,6 +349,92 @@ router.get('/current-owned/:userId', requireAuth, async (req, res) => {
 });
 
 /**
+ * GET /api/selections/current-owned/:userId
+ * 
+ * 獲取用戶目前擁有的所有影片（累積所有歷史選擇）
+ */
+router.get('/current-owned/:userId', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const authProfile = req.authUserProfile;
+    const authUser = req.authUser;
+    const currentUserId = authProfile?.id || authUser?.id;
+    
+    // 權限檢查：只能查詢自己的，或者管理員可以查詢所有
+    if (currentUserId !== userId && authProfile?.role !== 'admin' && authProfile?.role !== 'uploader') {
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: '無權限查詢此用戶的資料' 
+      });
+    }
+    
+    // 獲取該用戶所有的選擇記錄
+    const { data: selections, error: selectionsError } = await supabase
+      .from('selections')
+      .select('video_ids')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (selectionsError) throw selectionsError;
+    
+    if (!selections || selections.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          ownedVideos: [],
+          ownedVideoIds: []
+        }
+      });
+    }
+    
+    // 合併所有選擇的影片 ID（去重）
+    const allVideoIds = new Set();
+    selections.forEach(selection => {
+      if (selection.video_ids && Array.isArray(selection.video_ids)) {
+        selection.video_ids.forEach(id => allVideoIds.add(id));
+      }
+    });
+    
+    const uniqueVideoIds = Array.from(allVideoIds);
+    
+    if (uniqueVideoIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          ownedVideos: [],
+          ownedVideoIds: []
+        }
+      });
+    }
+    
+    // 獲取這些影片的詳細資訊
+    const { data: videos, error: videosError } = await supabase
+      .from('videos')
+      .select('*')
+      .in('id', uniqueVideoIds);
+    
+    if (videosError) throw videosError;
+    
+    console.log(`📋 用戶 ${userId} 目前擁有 ${videos.length} 部影片`);
+    
+    res.json({
+      success: true,
+      data: {
+        ownedVideos: videos || [],
+        ownedVideoIds: uniqueVideoIds
+      }
+    });
+    
+  } catch (error) {
+    console.error('獲取擁有影片失敗:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: error.message || '獲取擁有影片失敗'
+    });
+  }
+});
+
+/**
  * GET /api/selections/previous/:currentBatchId
  * 
  * 獲取用戶在上一個月批次的選擇（保留用於郵件通知）
