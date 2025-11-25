@@ -282,9 +282,27 @@ export default function MovieSelection() {
 
   // 計算差異
   const currentVideoIds = videos.map(v => v.id)
+  
+  // 將下架的影片：目前擁有但未被選中的
   const removedVideos = ownedVideos.filter(v => !selectedIds.includes(v.id))
-  const addedVideos = videos.filter(v => selectedIds.includes(v.id) && !ownedVideoIds.includes(v.id))
+  
+  // 保留的影片：目前擁有且仍被選中的
   const keptVideos = ownedVideos.filter(v => selectedIds.includes(v.id))
+  
+  // 新增的影片：被選中但不在目前擁有中的（真正的新增）
+  const addedVideos = videos.filter(v => {
+    const isSelected = selectedIds.includes(v.id)
+    const isAlreadyOwned = ownedVideoIds.includes(v.id)
+    return isSelected && !isAlreadyOwned
+  })
+  
+  console.log('📊 差異計算:', {
+    ownedVideoIds: ownedVideoIds.length,
+    selectedIds: selectedIds.length,
+    removed: removedVideos.length,
+    kept: keptVideos.length,
+    added: addedVideos.length
+  })
 
   return (
     <div className="space-y-8 pb-24">
@@ -670,12 +688,13 @@ export default function MovieSelection() {
 
           {/* Modal Panel */}
           <div 
-            className="relative w-full max-w-2xl transform overflow-hidden rounded-2xl bg-white text-left shadow-xl transition-all border border-gray-100 animate-fade-in max-h-[90vh] overflow-y-auto"
+            className="relative w-full max-w-2xl transform rounded-2xl bg-white text-left shadow-xl transition-all border border-gray-100 animate-fade-in max-h-[90vh] flex flex-col"
             role="dialog"
             aria-modal="true"
           >
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
+            {/* Header - Fixed */}
+            <div className="p-6 pb-4 border-b border-gray-100 flex-shrink-0">
+              <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold leading-6 text-gray-900">
                   確認影片選擇異動
                 </h3>
@@ -687,7 +706,10 @@ export default function MovieSelection() {
                   <X className="h-5 w-5" />
                 </button>
               </div>
-              
+            </div>
+            
+            {/* Content - Scrollable */}
+            <div className="p-6 overflow-y-auto flex-1">
               {/* 異動摘要 */}
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
                 <div className="flex items-center gap-2 mb-3">
@@ -721,7 +743,7 @@ export default function MovieSelection() {
                     <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     將下架的影片 ({removedVideos.length} 部)
                   </h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                  <div className="space-y-2">
                     {removedVideos.map((video) => (
                       <div key={video.id} className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
                         <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
@@ -751,7 +773,7 @@ export default function MovieSelection() {
                     <div className="w-2 h-2 bg-green-500 rounded-full"></div>
                     新增的影片 ({addedVideos.length} 部)
                   </h4>
-                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                  <div className="space-y-2">
                     {addedVideos.map((video) => (
                       <div key={video.id} className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
                         <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
@@ -803,9 +825,11 @@ export default function MovieSelection() {
                   </div>
                 </div>
               )}
-              
-              {/* 按鈕 */}
-              <div className="flex gap-3 justify-end mt-6 pt-6 border-t">
+            </div>
+            
+            {/* Footer - Fixed */}
+            <div className="p-6 pt-4 border-t border-gray-100 flex-shrink-0">
+              <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => setShowConfirmModal(false)}
                   className="btn-ghost px-6 py-2"
