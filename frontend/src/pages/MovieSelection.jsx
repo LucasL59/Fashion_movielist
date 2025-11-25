@@ -4,7 +4,7 @@
  * 顯示影片清單並允許客戶選擇，支援月份選擇
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Filter, Send, History, X } from 'lucide-react'
@@ -49,6 +49,46 @@ export default function MovieSelection() {
   
   // 確認 Modal
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  
+  // ---- Helper: Video identity normalization (same film across batches) ----
+  const normalizeVideoKey = (video) => {
+    if (!video) return ''
+    const zh = (video.title || '').trim().toLowerCase()
+    const en = (video.title_en || '').trim().toLowerCase()
+    const duration = video.duration ? String(video.duration).trim().toLowerCase() : ''
+    const rating = video.rating ? String(video.rating).trim().toLowerCase() : ''
+    const combined = `${zh}__${en}__${duration}__${rating}`
+    return combined.replace(/^_+|_+$/g, '')
+  }
+
+  const videoMap = useMemo(() => {
+    const map = new Map()
+    videos.forEach(video => {
+      map.set(video.id, video)
+    })
+    return map
+  }, [videos])
+
+  const ownedVideoIdSet = useMemo(() => new Set(ownedVideoIds), [ownedVideoIds])
+
+  const activeOwnedKeySet = useMemo(() => {
+    const set = new Set()
+    ownedVideos.forEach(video => {
+      if (selectedIds.includes(video.id)) {
+        const key = normalizeVideoKey(video)
+        if (key) set.add(key)
+      }
+    })
+    return set
+  }, [ownedVideos, selectedIds])
+
+  const isVideoAlreadyOwned = (video) => {
+    if (!video) return false
+    if (ownedVideoIdSet.has(video.id)) return true
+    const key = normalizeVideoKey(video)
+    if (!key) return false
+    return activeOwnedKeySet.has(key)
+  }
   
   useEffect(() => {
     loadMonths()
@@ -254,6 +294,20 @@ export default function MovieSelection() {
   function handleToggle(videoId) {
     if (submitting) return
     
+    const isCurrentlySelected = selectedIds.includes(videoId)
+    
+    if (!isCurrentlySelected) {
+      const video = videoMap.get(videoId)
+      if (video) {
+        const key = normalizeVideoKey(video)
+        const hasActiveOwned = ownedVideoIdSet.has(videoId) || (key && activeOwnedKeySet.has(key))
+        if (hasActiveOwned) {
+          showToast('這部影片已在您的「目前擁有」清單中，如要改選請先在上方取消勾選舊的版本', 'warning')
+          return
+        }
+      }
+    }
+    
     setSelectedIds(prev => {
       if (prev.includes(videoId)) {
         return prev.filter(id => id !== videoId)
@@ -325,29 +379,28 @@ export default function MovieSelection() {
   // 新增的影片：被選中但不在目前擁有中的（真正的新增）
   const addedVideos = videos.filter(v => {
     const isSelected = selectedIds.includes(v.id)
-    const isAlreadyOwned = ownedVideoIds.includes(v.id)
-    const result = isSelected && !isAlreadyOwned
+    if (!isSelected) return false
     
-    if (isSelected && isAlreadyOwned) {
-      console.log(`🔵 ${v.title} 已擁有且被選中 (應該在保留中)`)
-    }
-    if (result) {
-      console.log(`🟢 ${v.title} 是新增的影片`)
+    const alreadyOwned = isVideoAlreadyOwned(v)
+    
+    if (alreadyOwned) {
+      console.log(`🔵 ${v.title} 已擁有且被選中 (應該留在保留區)`)
+      return false
     }
     
-    return result
+    console.log(`🟢 ${v.title} 被視為新增影片`)
+    return true
   })
   
   console.log('📊 差異計算:', {
-    ownedVideoIds: ownedVideoIds.length,
-    ownedVideoIdsArray: ownedVideoIds,
-    selectedIds: selectedIds.length,
+    ownedVideoIdCount: ownedVideoIdSet.size,
+    selectedIdCount: selectedIds.length,
     removed: removedVideos.length,
     kept: keptVideos.length,
     added: addedVideos.length
   })
   
-  console.log('🎬 目前擁有的影片 ID:', ownedVideoIds)
+  console.log('🎬 目前擁有的影片 ID:', Array.from(ownedVideoIdSet))
   console.log('✅ 已選擇的影片 ID:', selectedIds)
 
   return (
@@ -603,14 +656,14 @@ export default function MovieSelection() {
                   video={video}
                   isSelected={selectedIds.includes(video.id)}
                   onToggle={handleToggle}
-                  isAlreadyOwned={ownedVideoIds.includes(video.id)}
+                  isAlreadyOwned={isVideoAlreadyOwned(video)}
                 />
               ))}
             </div>
           ) : (
             <div className="space-y-4 max-w-4xl mx-auto">
               {displayedVideos.map((video) => {
-                const isOwned = ownedVideoIds.includes(video.id)
+                const isOwned = isVideoAlreadyOwned(video)
                 const isSelected = selectedIds.includes(video.id)
                 
                 return (
