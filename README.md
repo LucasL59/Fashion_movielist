@@ -64,6 +64,7 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 - ✅ 設定每月提醒通知
 - ✅ 管理所有用戶角色
 - ✅ 查看系統操作紀錄（Audit Log）
+- ✅ 查看各月份所有客戶的已選清單與異動摘要
 
 #### 上傳者 (Uploader) ⭐ 新增
 - ✅ 上傳包含嵌入圖片的 Excel 影片清單

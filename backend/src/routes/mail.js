@@ -9,8 +9,190 @@ import { supabase } from '../config/supabase.js'
 import { requireAuth, requireAdmin, requireRoles } from '../middleware/auth.js'
 import { recordOperationLog } from '../services/operationLogService.js'
 import { notifyCustomersNewList } from '../services/emailService.js'
+import { sendEmail } from '../config/graphClient.js'
 
 const router = express.Router()
+
+/**
+ * POST /api/mail-rules/notifications/resend-to-user
+ * 補發通知給單一使用者（僅限 admin）
+ */
+router.post('/notifications/resend-to-user', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { userId, userEmail, userName, batchId, batchName } = req.body;
+    
+    if (!userEmail || !batchId || !batchName) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: '缺少必要參數'
+      });
+    }
+    
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    
+    // 發送「新的影片清單已上傳」郵件
+    const emailBody = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <style>
+          body { font-family: 'Noto Sans TC', 'PingFang TC', sans-serif; line-height: 1.8; color: #3f3a36; background-color: #fdf7f2; margin: 0; padding: 0; }
+          .container { max-width: 640px; margin: 0 auto; padding: 24px; }
+          .card { background: #fff; border-radius: 16px; border: 1px solid #f0e0d6; overflow: hidden; box-shadow: 0 20px 45px rgba(89, 57, 47, 0.12); }
+          .header { background-color: #d9b08c; color: #fff; padding: 28px; text-align: center; }
+          .header h1 { margin: 0; font-size: 24px; letter-spacing: 2px; }
+          .content { padding: 32px; }
+          .button { display: inline-block; background-color: #a6653f; color: #fff !important; padding: 14px 28px; border-radius: 999px; text-decoration: none; font-weight: 600; letter-spacing: 1px; }
+          .footer { text-align: center; padding: 24px; font-size: 12px; color: #8c7a71; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="card">
+            <div class="header">
+              <h1>新的影片清單已就緒</h1>
+            </div>
+            <div class="content">
+              <p>親愛的 ${userName || '使用者'}，您好：</p>
+              <p>最新的影片清單 <strong>${batchName}</strong> 已上線，歡迎登入系統挑選本月想要播放的片單。</p>
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${frontendUrl}/movies" class="button">立即挑選影片</a>
+              </div>
+              <p>如有任何需求或問題，歡迎與我們聯繫，我們會盡快協助。</p>
+            </div>
+            <div class="footer">
+              <p>MVI 影片選擇系統｜飛訊資訊科技有限公司</p>
+              <p>此信件為系統通知，請勿直接回覆。</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+    
+    await sendEmail({
+      to: userEmail,
+      subject: `新的影片清單已上傳 - ${batchName}`,
+      body: emailBody
+    });
+    
+    // 記錄操作
+    await recordOperationLog({
+      req,
+      action: 'mail.resend_to_user',
+      resourceType: 'batch',
+      resourceId: batchId,
+      description: `${req.authUserProfile?.name || '未知用戶'} 補發批次「${batchName}」的通知給 ${userName}`,
+      metadata: {
+        batchId,
+        batchName,
+        targetUserId: userId,
+        targetUserEmail: userEmail,
+        targetUserName: userName
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: '通知已成功發送',
+      data: {
+        sentTo: userEmail,
+        batchName
+      }
+    });
+    
+  } catch (error) {
+    console.error('補發通知失敗:', error);
+    res.status(500).json({
+      error: 'NotificationError',
+      message: error.message || '無法發送通知'
+    });
+  }
+});
+
+/**
+ * POST /api/mail-rules/notifications/upload
+ * 補發上傳通知（允許 admin 與 uploader）
+ */
+router.post('/notifications/upload', requireAuth, requireRoles(['admin', 'uploader']), async (req, res) => {
+  try {
+    const { batchId } = req.body;
+    
+    let targetBatch = null;
+    
+    if (batchId) {
+      // 如果指定了 batchId，查詢該批次
+      const { data, error } = await supabase
+        .from('batches')
+        .select('id, name, created_at')
+        .eq('id', batchId)
+        .maybeSingle();
+      
+      if (error) throw error;
+      if (!data) {
+        return res.status(404).json({
+          error: 'NotFound',
+          message: '找不到指定的批次'
+        });
+      }
+      targetBatch = data;
+    } else {
+      // 否則找最新的 active 批次
+      const { data, error } = await supabase
+        .from('batches')
+        .select('id, name, created_at')
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      if (error && error.code !== 'PGRST116') throw error;
+      
+      if (!data) {
+        return res.status(404).json({
+          error: 'NotFound',
+          message: '目前沒有可用的批次'
+        });
+      }
+      targetBatch = data;
+    }
+    
+    // 發送統一通知
+    const notificationStats = await notifyCustomersNewList(targetBatch.id, targetBatch.name);
+    
+    // 記錄操作
+    await recordOperationLog({
+      req,
+      action: 'mail.batch_uploaded.resend',
+      resourceType: 'batch',
+      resourceId: targetBatch.id,
+      description: `${req.authUserProfile?.name || '未知用戶'} 補發批次「${targetBatch.name}」的上傳通知`,
+      metadata: {
+        batchId: targetBatch.id,
+        batchName: targetBatch.name,
+        notificationStats
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: '通知已成功發送',
+      data: {
+        batchId: targetBatch.id,
+        batchName: targetBatch.name,
+        notificationStats
+      }
+    });
+    
+  } catch (error) {
+    console.error('補發通知失敗:', error);
+    res.status(500).json({
+      error: 'NotificationError',
+      message: error.message || '無法發送通知'
+    });
+  }
+});
 
 const EVENT_TYPES = ['selection_submitted', 'batch_uploaded']
 
@@ -18,12 +200,37 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 }
 
-function getAdminEmails() {
-  const raw = process.env.ADMIN_EMAIL || ''
-  return raw
-    .split(',')
-    .map((email) => email.trim())
-    .filter(Boolean)
+async function getAdminProfiles() {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, name, email, role')
+      .eq('role', 'admin')
+      .order('name', { ascending: true });
+
+    if (error) throw error;
+    
+    // 如果有管理員資料，回傳；否則回退到環境變數
+    if (data && data.length > 0) {
+      return data;
+    }
+    
+    // 回退：從環境變數建立虛擬管理員資料
+    const envEmails = (process.env.ADMIN_EMAIL || '')
+      .split(',')
+      .map((email) => email.trim())
+      .filter(Boolean);
+    
+    return envEmails.map((email, index) => ({
+      id: `env-admin-${index}`,
+      name: '系統管理員',
+      email,
+      role: 'admin'
+    }));
+  } catch (error) {
+    console.error('取得管理員資料失敗:', error);
+    return [];
+  }
 }
 
 async function fetchAllProfiles() {
@@ -36,13 +243,15 @@ async function fetchAllProfiles() {
   return data || []
 }
 
-function buildDefaultRecipients(users) {
-  const adminEntries = getAdminEmails().map((email, index) => ({
-    id: `admin-${index}`,
-    name: '系統管理員',
-    email,
-    description: '',
-  }))
+async function buildDefaultRecipients(users) {
+  const adminProfiles = await getAdminProfiles();
+  
+  const adminEntries = adminProfiles.map((admin) => ({
+    id: admin.id,
+    name: admin.name,
+    email: admin.email,
+    description: '系統管理員',
+  }));
 
   return {
     selection_submitted: [
@@ -54,26 +263,32 @@ function buildDefaultRecipients(users) {
         description: '實際寄信時會依照批次上傳者自動加入並排除重複',
       },
     ],
-    batch_uploaded: (users || []).map((user) => ({
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      description:
-        user.role === 'admin'
-          ? '系統管理員'
-          : user.role === 'uploader'
-          ? '上傳者'
-          : '客戶',
-    })),
+    batch_uploaded: (users || [])
+      .filter((user) => user.role !== 'customer') // 只顯示管理員與上傳者
+      .map((user) => ({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        description:
+          user.role === 'admin'
+            ? '系統管理員'
+            : user.role === 'uploader'
+            ? '上傳者'
+            : '其他',
+      })),
   }
 }
 
-function getDefaultEmails(eventType, users = []) {
+async function getDefaultEmails(eventType, users = []) {
   if (eventType === 'selection_submitted') {
-    return getAdminEmails()
+    const adminProfiles = await getAdminProfiles();
+    return adminProfiles.map(admin => admin.email).filter(Boolean);
   }
   if (eventType === 'batch_uploaded') {
-    return (users || []).map((user) => user.email).filter(Boolean)
+    return (users || [])
+      .filter((user) => user.role !== 'customer') // 只包含管理員與上傳者
+      .map((user) => user.email)
+      .filter(Boolean);
   }
   return []
 }
@@ -103,12 +318,14 @@ router.get('/', async (req, res) => {
     ])
     if (error) throw error
 
+    const defaults = await buildDefaultRecipients(users);
+
     res.json({
       success: true,
       data: {
         rules: data || [],
         availableUsers: users || [],
-        defaults: buildDefaultRecipients(users),
+        defaults: defaults,
       },
     })
   } catch (error) {
@@ -166,7 +383,7 @@ router.post('/', async (req, res) => {
 
     const usersForDefaults =
       eventType === 'batch_uploaded' ? await fetchAllProfiles() : []
-    const defaultEmails = getDefaultEmails(eventType, usersForDefaults)
+    const defaultEmails = await getDefaultEmails(eventType, usersForDefaults)
     if (defaultEmails.includes(finalEmail)) {
       return res.status(400).json({
         error: 'DuplicateRecipient',

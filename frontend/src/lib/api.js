@@ -191,6 +191,14 @@ export async function getPreviousSelection(currentBatchId) {
 }
 
 /**
+ * 獲取用戶目前擁有的所有影片（累積）
+ */
+export async function getCurrentOwnedVideos(userId) {
+  const response = await api.get(`/api/selections/current-owned/${userId}`)
+  return response.data
+}
+
+/**
  * 郵件規則相關 API
  */
 export async function getMailRules(params = {}) {
@@ -347,6 +355,14 @@ export async function getOperationLogActions() {
 
 export async function recordOperationEvent(payload) {
   const response = await api.post('/api/operation-logs/events', payload)
+  return response.data
+}
+
+/**
+ * 取得指定月份所有客戶的選擇摘要（僅管理員）
+ */
+export async function getMonthlySelectionSummary(month) {
+  const response = await api.get('/api/selections/monthly-summary', { params: { month } })
   return response.data
 }
 

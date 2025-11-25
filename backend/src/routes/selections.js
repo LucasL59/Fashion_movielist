@@ -260,9 +260,98 @@ router.get('/batch/:batchId', async (req, res) => {
 });
 
 /**
+ * GET /api/selections/current-owned/:userId
+ * 
+ * 獲取用戶目前擁有的所有影片（累積所有歷史選擇）
+ */
+router.get('/current-owned/:userId', requireAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const authProfile = req.authUserProfile;
+    const authUser = req.authUser;
+    const currentUserId = authProfile?.id || authUser?.id;
+    
+    // 驗證權限：只能查詢自己的或管理員可查詢所有
+    if (currentUserId !== userId && authProfile?.role !== 'admin') {
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: '無權限查詢此用戶資料' 
+      });
+    }
+    
+    // 獲取該用戶所有的選擇記錄
+    const { data: allSelections, error: selectionsError } = await supabase
+      .from('selections')
+      .select('video_ids, batch_id, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    
+    if (selectionsError) throw selectionsError;
+    
+    if (!allSelections || allSelections.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          ownedVideoIds: [],
+          ownedVideos: [],
+          totalSelections: 0
+        }
+      });
+    }
+    
+    // 收集所有選擇過的影片 ID（去重）
+    const allVideoIds = new Set();
+    allSelections.forEach(selection => {
+      if (selection.video_ids && Array.isArray(selection.video_ids)) {
+        selection.video_ids.forEach(id => allVideoIds.add(id));
+      }
+    });
+    
+    const ownedVideoIds = Array.from(allVideoIds);
+    
+    if (ownedVideoIds.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          ownedVideoIds: [],
+          ownedVideos: [],
+          totalSelections: allSelections.length
+        }
+      });
+    }
+    
+    // 獲取這些影片的詳細資訊
+    const { data: ownedVideos, error: videosError } = await supabase
+      .from('videos')
+      .select('*')
+      .in('id', ownedVideoIds);
+    
+    if (videosError) throw videosError;
+    
+    console.log(`✅ 用戶 ${userId} 目前擁有 ${ownedVideoIds.length} 部影片`);
+    
+    res.json({
+      success: true,
+      data: {
+        ownedVideoIds: ownedVideoIds,
+        ownedVideos: ownedVideos || [],
+        totalSelections: allSelections.length
+      }
+    });
+    
+  } catch (error) {
+    console.error('查詢用戶擁有影片錯誤:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: error.message || '查詢失敗'
+    });
+  }
+});
+
+/**
  * GET /api/selections/previous/:currentBatchId
  * 
- * 獲取用戶在上一個月批次的選擇
+ * 獲取用戶在上一個月批次的選擇（保留用於郵件通知）
  * 根據當前批次的月份，找出上一個月的批次與該用戶的選擇
  */
 router.get('/previous/:currentBatchId', requireAuth, async (req, res) => {
@@ -388,6 +477,212 @@ router.get('/previous/:currentBatchId', requireAuth, async (req, res) => {
     res.status(500).json({ 
       error: 'Internal Server Error',
       message: error.message || '查詢上月選擇失敗'
+    });
+  }
+});
+
+/**
+ * GET /api/selections/monthly-summary
+ * 
+ * 管理員查看指定月份所有客戶的選擇摘要與異動
+ * 包含本月選擇、上月選擇、新增/下架/保留的影片
+ */
+router.get('/monthly-summary', requireAuth, async (req, res) => {
+  try {
+    const authProfile = req.authUserProfile;
+    const authUser = req.authUser;
+    
+    // 檢查是否為管理員
+    if (authProfile?.role !== 'admin' && authUser?.user_metadata?.role !== 'admin') {
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: '此功能僅限管理員使用' 
+      });
+    }
+    
+    const { month } = req.query;
+    
+    if (!month || !/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ 
+        error: 'Bad Request',
+        message: '請提供有效的月份格式 (YYYY-MM)' 
+      });
+    }
+    
+    console.log(`📊 管理員查詢月份摘要: ${month}`);
+    
+    // 計算上一個月份
+    const [year, monthNum] = month.split('-').map(Number);
+    const prevDate = new Date(year, monthNum - 2, 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+    
+    // 查找當前月份的批次
+    const { data: currentBatches, error: currentBatchError } = await supabase
+      .from('batches')
+      .select('*')
+      .eq('month', month)
+      .order('created_at', { ascending: false });
+    
+    if (currentBatchError) throw currentBatchError;
+    
+    // 查找上一個月份的批次
+    const { data: previousBatches, error: prevBatchError } = await supabase
+      .from('batches')
+      .select('*')
+      .eq('month', prevMonth)
+      .order('created_at', { ascending: false });
+    
+    if (prevBatchError) throw prevBatchError;
+    
+    const currentBatch = currentBatches && currentBatches.length > 0 ? currentBatches[0] : null;
+    const previousBatch = previousBatches && previousBatches.length > 0 ? previousBatches[0] : null;
+    
+    // 獲取所有客戶
+    const { data: customers, error: customersError } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .eq('role', 'customer')
+      .order('name', { ascending: true });
+    
+    if (customersError) throw customersError;
+    
+    if (!customers || customers.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          month,
+          prevMonth,
+          currentBatch,
+          previousBatch,
+          summaries: []
+        }
+      });
+    }
+    
+    // 批次獲取當前月份的所有選擇
+    let currentSelections = [];
+    if (currentBatch) {
+      const { data, error } = await supabase
+        .from('selections')
+        .select('user_id, video_ids, created_at')
+        .eq('batch_id', currentBatch.id);
+      
+      if (error) throw error;
+      currentSelections = data || [];
+    }
+    
+    // 批次獲取上一個月份的所有選擇
+    let previousSelections = [];
+    if (previousBatch) {
+      const { data, error } = await supabase
+        .from('selections')
+        .select('user_id, video_ids, created_at')
+        .eq('batch_id', previousBatch.id);
+      
+      if (error) throw error;
+      previousSelections = data || [];
+    }
+    
+    // 建立選擇的 Map 以便快速查找
+    const currentSelectionsMap = new Map();
+    currentSelections.forEach(sel => {
+      currentSelectionsMap.set(sel.user_id, sel);
+    });
+    
+    const previousSelectionsMap = new Map();
+    previousSelections.forEach(sel => {
+      previousSelectionsMap.set(sel.user_id, sel);
+    });
+    
+    // 獲取所有涉及的影片 ID
+    const allVideoIds = new Set();
+    currentSelections.forEach(sel => {
+      (sel.video_ids || []).forEach(id => allVideoIds.add(id));
+    });
+    previousSelections.forEach(sel => {
+      (sel.video_ids || []).forEach(id => allVideoIds.add(id));
+    });
+    
+    // 批次獲取所有影片詳情
+    let videosMap = new Map();
+    if (allVideoIds.size > 0) {
+      const { data: videos, error: videosError } = await supabase
+        .from('videos')
+        .select('id, title, title_en, thumbnail_url')
+        .in('id', Array.from(allVideoIds));
+      
+      if (videosError) throw videosError;
+      
+      (videos || []).forEach(video => {
+        videosMap.set(video.id, video);
+      });
+    }
+    
+    // 為每個客戶組合摘要資料
+    const summaries = customers.map(customer => {
+      const currentSelection = currentSelectionsMap.get(customer.id);
+      const previousSelection = previousSelectionsMap.get(customer.id);
+      
+      const currentVideoIds = currentSelection?.video_ids || [];
+      const previousVideoIds = previousSelection?.video_ids || [];
+      
+      // 計算差異
+      const addedIds = currentVideoIds.filter(id => !previousVideoIds.includes(id));
+      const removedIds = previousVideoIds.filter(id => !currentVideoIds.includes(id));
+      const keptIds = currentVideoIds.filter(id => previousVideoIds.includes(id));
+      
+      // 組合影片詳情
+      const currentVideos = currentVideoIds.map(id => videosMap.get(id)).filter(Boolean);
+      const previousVideos = previousVideoIds.map(id => videosMap.get(id)).filter(Boolean);
+      const addedVideos = addedIds.map(id => videosMap.get(id)).filter(Boolean);
+      const removedVideos = removedIds.map(id => videosMap.get(id)).filter(Boolean);
+      const keptVideos = keptIds.map(id => videosMap.get(id)).filter(Boolean);
+      
+      return {
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email
+        },
+        currentSelection: currentSelection ? {
+          videoCount: currentVideoIds.length,
+          submittedAt: currentSelection.created_at,
+          videos: currentVideos
+        } : null,
+        previousSelection: previousSelection ? {
+          videoCount: previousVideoIds.length,
+          submittedAt: previousSelection.created_at,
+          videos: previousVideos
+        } : null,
+        diff: {
+          added: addedVideos,
+          removed: removedVideos,
+          kept: keptVideos,
+          addedCount: addedVideos.length,
+          removedCount: removedVideos.length,
+          keptCount: keptVideos.length
+        }
+      };
+    });
+    
+    console.log(`✅ 已生成 ${summaries.length} 位客戶的摘要`);
+    
+    res.json({
+      success: true,
+      data: {
+        month,
+        prevMonth,
+        currentBatch,
+        previousBatch,
+        summaries
+      }
+    });
+    
+  } catch (error) {
+    console.error('查詢月份摘要錯誤:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: error.message || '查詢月份摘要失敗'
     });
   }
 });

@@ -282,6 +282,63 @@ const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).p
 - 與既有「已選記憶」功能並存，不衝突
 - 郵件模板採用 inline CSS，確保各郵件客戶端相容
 
+## 👨‍💼 管理員視圖（v2.2.1 新增）
+
+### 已選片單總覽頁面
+
+管理員可透過專屬頁面查看所有客戶在指定月份的選擇清單與異動。
+
+**路徑：** `/selection-summary`
+
+**功能特色：**
+
+1. **月份選擇**：下拉選單切換不同月份
+2. **客戶搜尋**：依名稱或 Email 快速篩選
+3. **統計摘要**：顯示總客戶數、已提交數、待提交數
+4. **客戶清單卡片**：
+   - 顯示客戶基本資訊與提交狀態
+   - 展開查看本月/上月選擇詳情
+   - 異動摘要：下架/新增/保留數量
+   - 影片清單：標記「新增」「已下架」「保留」
+5. **響應式設計**：支援桌面與行動裝置
+
+**API 端點：** `GET /api/selections/monthly-summary?month=YYYY-MM`
+
+**回應格式：**
+```json
+{
+  "success": true,
+  "data": {
+    "month": "2024-11",
+    "prevMonth": "2024-10",
+    "currentBatch": { ... },
+    "previousBatch": { ... },
+    "summaries": [
+      {
+        "customer": { "id": "...", "name": "...", "email": "..." },
+        "currentSelection": { "videoCount": 5, "submittedAt": "...", "videos": [...] },
+        "previousSelection": { "videoCount": 3, "submittedAt": "...", "videos": [...] },
+        "diff": {
+          "added": [...],
+          "removed": [...],
+          "kept": [...],
+          "addedCount": 2,
+          "removedCount": 1,
+          "keptCount": 2
+        }
+      }
+    ]
+  }
+}
+```
+
+**使用情境：**
+
+- 管理員需要快速了解各客戶本月的選擇狀況
+- 查看特定客戶相較上月的異動（下架了哪些、新增了哪些）
+- 追蹤客戶提交進度（已提交 vs 待提交）
+- 匯出或整理客戶選擇報表
+
 ## 🔄 未來擴展
 
 ### 可能的功能增強
@@ -290,6 +347,7 @@ const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).p
 2. **選擇歷史**：在 SelectionHistory 頁面中也顯示月份差異
 3. **統計圖表**：管理員後台顯示每月新增/下架趨勢
 4. **自動建議**：根據歷史選擇推薦本月影片
+5. **匯出功能**：將管理員視圖的摘要匯出為 Excel 或 PDF ✅ 已實作管理員總覽頁面
 
 ### 效能優化
 

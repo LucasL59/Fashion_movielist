@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, LogOut, Settings, Upload, Users, Edit, Mail, Menu, X, ScrollText } from 'lucide-react'
+import { Film, LogOut, Settings, Upload, Users, Edit, Mail, Menu, X, ScrollText, ListChecks } from 'lucide-react'
 import Modal from './Modal'
 import { PrivacyPolicy, TermsOfService } from './LegalDocs'
 import { useToast } from '../contexts/ToastContext'
@@ -119,6 +119,7 @@ export default function Layout({ children }) {
                       <>
                         <NavLink to="/users" icon={Users}>用戶管理</NavLink>
                         <NavLink to="/mail" icon={Mail}>郵件管理</NavLink>
+                        <NavLink to="/selection-summary" icon={ListChecks}>已選清單</NavLink>
                         <NavLink to="/logs" icon={ScrollText}>操作紀錄</NavLink>
                         <NavLink to="/movies" icon={Film}>選擇影片</NavLink>
                       </>
@@ -189,6 +190,7 @@ export default function Layout({ children }) {
                     <>
                       <MobileNavLink to="/users" icon={Users}>用戶管理</MobileNavLink>
                       <MobileNavLink to="/mail" icon={Mail}>郵件管理</MobileNavLink>
+                      <MobileNavLink to="/selection-summary" icon={ListChecks}>已選清單</MobileNavLink>
                       <MobileNavLink to="/logs" icon={ScrollText}>操作紀錄</MobileNavLink>
                     </>
                   )}

@@ -98,13 +98,14 @@ router.post('/', requireAuth, requireRoles(['admin', 'uploader']), async (req, r
     
     console.log(`✅ 上傳成功: ${result.videoCount} 部影片`);
     
-    // 發送通知給所有客戶
+    // 發送統一通知給客戶與內部人員
+    let notificationStats = null;
     try {
-      await notifyCustomersNewList(result.batchId, batchName);
-      console.log('📧 已發送通知給所有客戶');
+      notificationStats = await notifyCustomersNewList(result.batchId, batchName);
+      console.log(`📧 通知已發送 - 客戶: ${notificationStats.customersSent} 位，內部: ${notificationStats.internalSent} 位`);
     } catch (emailError) {
       console.error('發送通知失敗:', emailError);
-      // 即使通知失敗，上傳仍然成功
+      // 即使通知失敗，上傳仍然成功，但記錄錯誤
     }
     
     await recordOperationLog({
@@ -118,6 +119,8 @@ router.post('/', requireAuth, requireRoles(['admin', 'uploader']), async (req, r
         batchName: result.batchName,
         videoCount: result.videoCount,
         month: extractedMonth,
+        notificationSent: notificationStats ? true : false,
+        notificationStats: notificationStats || null,
       },
     })
 
@@ -128,7 +131,8 @@ router.post('/', requireAuth, requireRoles(['admin', 'uploader']), async (req, r
         batchId: result.batchId,
         batchName: result.batchName,
         videoCount: result.videoCount,
-        uploadedAt: result.uploadedAt
+        uploadedAt: result.uploadedAt,
+        notificationStats: notificationStats || null
       }
     });
     

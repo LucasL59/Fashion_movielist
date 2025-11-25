@@ -11,7 +11,7 @@ import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, L
 import MovieCard from '../components/MovieCard'
 import Select from '../components/Select'
 import BrandTransition from '../components/BrandTransition'
-import { getLatestVideos, getAvailableMonths, submitSelection, getPreviousSelection } from '../lib/api'
+import { getLatestVideos, getAvailableMonths, submitSelection, getPreviousSelection, getCurrentOwnedVideos } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { useToast } from '../contexts/ToastContext'
 
@@ -31,11 +31,16 @@ export default function MovieSelection() {
   
   const [viewMode, setViewMode] = useState('grid')
   
-  // 上月選擇相關
+  // 目前擁有的片單相關
+  const [ownedVideos, setOwnedVideos] = useState([])
+  const [ownedVideoIds, setOwnedVideoIds] = useState([])
+  const [loadingOwned, setLoadingOwned] = useState(false)
+  const [ownedViewMode, setOwnedViewMode] = useState('grid') // grid 或 list
+  
+  // 上月選擇相關（用於郵件通知差異計算）
   const [previousSelection, setPreviousSelection] = useState(null)
   const [previousVideos, setPreviousVideos] = useState([])
   const [previousVideoIds, setPreviousVideoIds] = useState([])
-  const [loadingPrevious, setLoadingPrevious] = useState(false)
   
   // 分頁設定
   const PAGE_SIZE = 12 // Increased for grid layout
@@ -55,14 +60,14 @@ export default function MovieSelection() {
     }
   }, [selectedMonth])
   
-  // 載入當月已選擇的影片與上月選擇
+  // 載入當月已選擇的影片與目前擁有的片單
   useEffect(() => {
     if (batch && user) {
-      loadCurrentAndPreviousSelection()
+      loadCurrentAndOwnedSelection()
     }
   }, [batch, user])
   
-  async function loadCurrentAndPreviousSelection() {
+  async function loadCurrentAndOwnedSelection() {
     try {
       // 載入當月已選擇的影片
       const { data, error } = await supabase
@@ -80,10 +85,43 @@ export default function MovieSelection() {
         setSelectedIds(data.video_ids)
       }
       
-      // 載入上月選擇
+      // 載入目前擁有的所有片單
+      await loadOwnedVideos()
+      
+      // 載入上月選擇（用於郵件通知差異）
       await loadPreviousMonthSelection()
     } catch (error) {
       console.error('載入選擇失敗:', error)
+    }
+  }
+  
+  async function loadOwnedVideos() {
+    if (!user || !user.id) return
+    
+    try {
+      setLoadingOwned(true)
+      const response = await getCurrentOwnedVideos(user.id)
+      
+      if (response.success && response.data) {
+        const { ownedVideos: owned, ownedVideoIds: ownedIds } = response.data
+        
+        if (owned && owned.length > 0) {
+          setOwnedVideos(owned)
+          setOwnedVideoIds(ownedIds)
+          
+          // 預選目前擁有的影片
+          setSelectedIds(prev => {
+            const combined = [...new Set([...prev, ...ownedIds])]
+            return combined
+          })
+          
+          console.log(`📋 載入目前擁有: ${owned.length} 部影片`)
+        }
+      }
+    } catch (error) {
+      console.error('載入擁有影片失敗:', error)
+    } finally {
+      setLoadingOwned(false)
     }
   }
   
@@ -91,7 +129,6 @@ export default function MovieSelection() {
     if (!batch || !batch.id) return
     
     try {
-      setLoadingPrevious(true)
       const response = await getPreviousSelection(batch.id)
       
       if (response.success && response.data) {
@@ -101,23 +138,10 @@ export default function MovieSelection() {
           setPreviousSelection(prevSel)
           setPreviousVideos(prevVids)
           setPreviousVideoIds(prevSel.video_ids || [])
-          
-          // 預選上月已選的影片（只預選在本月清單中仍存在的）
-          const currentVideoIds = videos.map(v => v.id)
-          const toPreselect = (prevSel.video_ids || []).filter(id => currentVideoIds.includes(id))
-          
-          setSelectedIds(prev => {
-            const combined = [...new Set([...prev, ...toPreselect])]
-            return combined
-          })
-          
-          console.log(`📋 載入上月選擇: ${prevVids.length} 部影片`)
         }
       }
     } catch (error) {
       console.error('載入上月選擇失敗:', error)
-    } finally {
-      setLoadingPrevious(false)
     }
   }
   
@@ -176,10 +200,12 @@ export default function MovieSelection() {
       setBatch(response.data.batch)
       setVideos(response.data.videos || [])
       
-      // 清空上月資料
+      // 清空資料
       setPreviousSelection(null)
       setPreviousVideos([])
       setPreviousVideoIds([])
+      setOwnedVideos([])
+      setOwnedVideoIds([])
       
       setSelectedIds([])
       setCurrentPage(1)
@@ -205,8 +231,8 @@ export default function MovieSelection() {
   }
   
   function handleSubmitClick() {
-    // 若有上月選擇，先顯示確認 Modal
-    if (previousVideos.length > 0) {
+    // 若有目前擁有的片單，先顯示確認 Modal
+    if (ownedVideos.length > 0) {
       setShowConfirmModal(true)
     } else {
       handleSubmit()
@@ -230,9 +256,8 @@ export default function MovieSelection() {
       
       showToast('影片選擇已提交成功！', 'success')
       
-      // 清空上月資料，因為已經送出新的選擇
-      setPreviousVideos([])
-      setPreviousVideoIds([])
+      // 重新載入擁有的片單
+      await loadOwnedVideos()
     } catch (error) {
       console.error('提交選擇失敗:', error)
       showToast('提交失敗，請稍後再試', 'error')
@@ -257,86 +282,140 @@ export default function MovieSelection() {
 
   // 計算差異
   const currentVideoIds = videos.map(v => v.id)
-  const removedVideos = previousVideos.filter(v => !selectedIds.includes(v.id))
-  const addedVideos = videos.filter(v => selectedIds.includes(v.id) && !previousVideoIds.includes(v.id))
-  const keptVideos = previousVideos.filter(v => selectedIds.includes(v.id))
+  const removedVideos = ownedVideos.filter(v => !selectedIds.includes(v.id))
+  const addedVideos = videos.filter(v => selectedIds.includes(v.id) && !ownedVideoIds.includes(v.id))
+  const keptVideos = ownedVideos.filter(v => selectedIds.includes(v.id))
 
   return (
     <div className="space-y-8 pb-24">
       <BrandTransition isVisible={loading || loadingMonths} />
       
-      {/* 上月選擇區塊 */}
-      {previousVideos.length > 0 && (
-        <div className="glass-panel rounded-2xl p-6 border-2 border-amber-200/50">
+      {/* 目前擁有的片單區塊 */}
+      {ownedVideos.length > 0 && (
+        <div className="glass-panel rounded-2xl p-6 border-2 border-blue-200/50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <div className="bg-amber-100 text-amber-700 p-2 rounded-lg">
-                <History className="h-5 w-5" />
+              <div className="bg-blue-100 text-blue-700 p-2 rounded-lg">
+                <ShoppingCart className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="font-bold text-lg text-gray-900">上月已選片單</h3>
-                <p className="text-sm text-gray-500">共 {previousVideos.length} 部影片 · 您可以取消勾選來下架</p>
+                <h3 className="font-bold text-lg text-gray-900">目前擁有的片單</h3>
+                <p className="text-sm text-gray-500">共 {ownedVideos.length} 部影片 · 點擊可取消下架</p>
               </div>
+            </div>
+            
+            {/* 視圖切換 */}
+            <div className="bg-gray-100/80 p-1 rounded-xl flex items-center flex-shrink-0">
+              <button
+                onClick={() => setOwnedViewMode('grid')}
+                className={`p-2 rounded-lg transition-all ${
+                  ownedViewMode === 'grid'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <Grid className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => setOwnedViewMode('list')}
+                className={`p-2 rounded-lg transition-all ${
+                  ownedViewMode === 'list'
+                    ? 'bg-white text-blue-600 shadow-sm'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                <ListIcon className="h-4 w-4" />
+              </button>
             </div>
           </div>
           
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {previousVideos.map((video) => {
-              const isStillSelected = selectedIds.includes(video.id)
-              const isInCurrentBatch = currentVideoIds.includes(video.id)
-              
-              return (
-                <div
-                  key={video.id}
-                  onClick={() => isInCurrentBatch && handleToggle(video.id)}
-                  className={`relative bg-white rounded-xl overflow-hidden transition-all duration-200 border-2 ${
-                    isStillSelected
-                      ? 'border-amber-400 shadow-md'
-                      : 'border-gray-200 opacity-60'
-                  } ${isInCurrentBatch ? 'cursor-pointer hover:shadow-lg' : 'cursor-not-allowed'}`}
-                >
-                  <div className="aspect-[2/3] bg-gray-100 overflow-hidden relative">
-                    {video.thumbnail_url ? (
-                      <img src={video.thumbnail_url} alt={video.title} className="w-full h-full object-cover" />
+          {ownedViewMode === 'grid' ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {ownedVideos.map((video) => {
+                const isStillSelected = selectedIds.includes(video.id)
+                
+                return (
+                  <div
+                    key={video.id}
+                    onClick={() => handleToggle(video.id)}
+                    className={`relative bg-white rounded-xl overflow-hidden transition-all duration-200 border-2 cursor-pointer hover:shadow-lg ${
+                      isStillSelected
+                        ? 'border-blue-400 shadow-md'
+                        : 'border-gray-200 opacity-60'
+                    }`}
+                  >
+                    <div className="aspect-[2/3] bg-gray-100 overflow-hidden relative">
+                      {video.thumbnail_url ? (
+                        <img src={video.thumbnail_url} alt={video.title} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-gray-300">
+                          <Film className="h-8 w-8" />
+                        </div>
+                      )}
+                      
+                      {isStillSelected ? (
+                        <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-[1px] flex items-center justify-center">
+                          <div className="bg-blue-500 text-white rounded-full p-1.5">
+                            <CheckCircle className="h-5 w-5" />
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                          <div className="bg-red-500 text-white rounded-full p-1.5">
+                            <X className="h-5 w-5" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="p-2">
+                      <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{video.title}</h4>
+                      {video.title_en && (
+                        <p className="text-xs text-gray-500 line-clamp-1">{video.title_en}</p>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {ownedVideos.map((video) => {
+                const isStillSelected = selectedIds.includes(video.id)
+                
+                return (
+                  <div
+                    key={video.id}
+                    onClick={() => handleToggle(video.id)}
+                    className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
+                      isStillSelected
+                        ? 'border-blue-400 bg-blue-50'
+                        : 'border-gray-200 bg-gray-50 opacity-60'
+                    }`}
+                  >
+                    <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
+                      {video.thumbnail_url ? (
+                        <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Film className="m-auto h-6 w-6 text-gray-400" />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm text-gray-900">{video.title}</div>
+                      {video.title_en && (
+                        <div className="text-xs text-gray-500">{video.title_en}</div>
+                      )}
+                    </div>
+                    {isStillSelected ? (
+                      <CheckCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300">
-                        <Film className="h-8 w-8" />
-                      </div>
-                    )}
-                    
-                    {isStillSelected && (
-                      <div className="absolute inset-0 bg-amber-500/10 backdrop-blur-[1px] flex items-center justify-center">
-                        <div className="bg-amber-500 text-white rounded-full p-1.5">
-                          <CheckCircle className="h-5 w-5" />
-                        </div>
-                      </div>
-                    )}
-                    
-                    {!isStillSelected && (
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <div className="bg-red-500 text-white rounded-full p-1.5">
-                          <X className="h-5 w-5" />
-                        </div>
-                      </div>
-                    )}
-                    
-                    {!isInCurrentBatch && (
-                      <div className="absolute top-2 right-2 bg-gray-800 text-white text-xs px-2 py-1 rounded">
-                        已無法選
-                      </div>
+                      <X className="h-5 w-5 text-red-500 flex-shrink-0" />
                     )}
                   </div>
-                  
-                  <div className="p-2">
-                    <h4 className="font-semibold text-sm text-gray-900 line-clamp-1">{video.title}</h4>
-                    {video.title_en && (
-                      <p className="text-xs text-gray-500 line-clamp-1">{video.title_en}</p>
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
       
@@ -585,12 +664,12 @@ export default function MovieSelection() {
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">{previousVideos.length}</div>
-                    <div className="text-xs text-gray-500">上月總數</div>
+                    <div className="text-2xl font-bold text-gray-700">{ownedVideos.length}</div>
+                    <div className="text-xs text-gray-500">目前擁有</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">{selectedIds.length}</div>
-                    <div className="text-xs text-gray-500">本月總數</div>
+                    <div className="text-2xl font-bold text-blue-600">{selectedIds.length}</div>
+                    <div className="text-xs text-gray-500">更新後總數</div>
                   </div>
                   <div className="text-center">
                     <div className="text-2xl font-bold text-red-600">{removedVideos.length}</div>

@@ -11,12 +11,14 @@ import { Upload, Film, Bell, Edit, CheckCircle2, AlertCircle, Clock, Mail } from
 import { getAdminDashboardOverview, resendUploadNotification } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
 import Modal from '../components/Modal'
+import Select from '../components/Select'
 
 export default function UploaderDashboard() {
   const { user } = useAuth()
   const { showToast } = useToast()
   const [status, setStatus] = useState({
     latestBatch: null,
+    allBatches: [],
     submittedCount: 0,
     pendingCount: 0,
     totalCustomers: 0,
@@ -26,6 +28,7 @@ export default function UploaderDashboard() {
   
   const [notificationModalOpen, setNotificationModalOpen] = useState(false)
   const [sendingNotification, setSendingNotification] = useState(false)
+  const [selectedResendBatch, setSelectedResendBatch] = useState('')
 
   useEffect(() => {
     loadStatus()
@@ -55,17 +58,46 @@ export default function UploaderDashboard() {
     })
   }
 
+  function handleOpenNotificationModal() {
+    // 預設選擇最新的批次
+    if (status.allBatches && status.allBatches.length > 0) {
+      setSelectedResendBatch(status.allBatches[0].id)
+    } else if (status.latestBatch) {
+      setSelectedResendBatch(status.latestBatch.id)
+    }
+    setNotificationModalOpen(true)
+  }
+
   async function handleResendNotification() {
-    if (!status.latestBatch) return
+    if (!selectedResendBatch) {
+      showToast('請選擇要補發通知的批次', 'warning')
+      return
+    }
+
+    const allBatches = status.allBatches || []
+    const batch = allBatches.find(b => b.id === selectedResendBatch) || status.latestBatch
+    
+    if (!batch) {
+      showToast('找不到選擇的批次', 'error')
+      return
+    }
 
     try {
       setSendingNotification(true)
-      await resendUploadNotification(status.latestBatch.id, status.latestBatch.name)
-      showToast('已成功發送通知給所有客戶', 'success')
+      const response = await resendUploadNotification(batch.id, batch.name)
+      
+      const stats = response.data?.notificationStats
+      if (stats) {
+        showToast(`已成功發送通知 - 客戶: ${stats.customersSent} 位，內部: ${stats.internalSent} 位`, 'success')
+        console.log('通知統計:', stats)
+      } else {
+        showToast('已成功發送通知給所有客戶', 'success')
+      }
+      
       setNotificationModalOpen(false)
     } catch (error) {
       console.error('發送通知失敗:', error)
-      showToast('發送通知失敗，請稍後再試', 'error')
+      showToast(error.response?.data?.message || '發送通知失敗，請稍後再試', 'error')
     } finally {
       setSendingNotification(false)
     }
@@ -187,7 +219,7 @@ export default function UploaderDashboard() {
               <p className="text-xs text-gray-400 mt-1">若客戶未收到信件可使用</p>
             </div>
             <button 
-              onClick={() => setNotificationModalOpen(true)}
+              onClick={handleOpenNotificationModal}
               className="p-3 rounded-full bg-primary-50 text-primary-600 hover:bg-primary-100 transition-colors"
               title="補發通知"
               disabled={!hasBatch}
@@ -250,7 +282,7 @@ export default function UploaderDashboard() {
               type="button"
               className="btn btn-primary"
               onClick={handleResendNotification}
-              disabled={sendingNotification}
+              disabled={sendingNotification || !selectedResendBatch}
             >
               {sendingNotification ? '發送中...' : '確認發送'}
             </button>
@@ -267,9 +299,26 @@ export default function UploaderDashboard() {
             </div>
           </div>
           
-          <p className="text-gray-600">
-            即將針對批次 <strong>{latestBatch?.name}</strong> 發送通知。
-          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              選擇要補發通知的批次
+            </label>
+            <Select
+              value={selectedResendBatch}
+              onChange={(e) => setSelectedResendBatch(e.target.value)}
+              options={[
+                { value: '', label: '請選擇批次' },
+                ...(status.allBatches || []).map((batch) => ({
+                  value: batch.id,
+                  label: `${batch.name} (${new Date(batch.created_at).toLocaleDateString('zh-TW')})`
+                }))
+              ]}
+              disabled={sendingNotification}
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              💡 提示：預設為最新批次，您也可以選擇前一個月的批次進行補發
+            </p>
+          </div>
         </div>
       </Modal>
     </div>

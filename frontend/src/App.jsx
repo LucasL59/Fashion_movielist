@@ -25,6 +25,7 @@ import MailManagement from './pages/MailManagement'
 import OperationLogs from './pages/OperationLogs'
 import ResetPassword from './pages/ResetPassword'
 import DemoTransition from './pages/DemoTransition'
+import AdminSelectionSummary from './pages/AdminSelectionSummary'
 
 // 佈局組件
 import Layout from './components/Layout'
@@ -159,6 +160,15 @@ function AppRoutes() {
         <ProtectedRoute requiredRole="admin">
           <Layout>
             <OperationLogs />
+          </Layout>
+        </ProtectedRoute>
+      } />
+      
+      {/* 已選片單總覽頁面（僅管理員） */}
+      <Route path="/selection-summary" element={
+        <ProtectedRoute requiredRole="admin">
+          <Layout>
+            <AdminSelectionSummary />
           </Layout>
         </ProtectedRoute>
       } />

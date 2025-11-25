@@ -5,23 +5,25 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
-import { Plus, Trash2, Mail, ShieldCheck, Info, AlertTriangle, Clock, Calendar, X } from 'lucide-react'
+import { Plus, Trash2, Mail, ShieldCheck, Info, AlertTriangle, Clock, Calendar, X, Send, User, Loader } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { createMailRule, deleteMailRule, getMailRules, getReminderSettings, setReminderSchedule } from '../lib/api'
+import { createMailRule, deleteMailRule, getMailRules, getReminderSettings, setReminderSchedule, getBatches } from '../lib/api'
 import Select from '../components/Select'
 import Modal from '../components/Modal'
 import { useToast } from '../contexts/ToastContext'
+import { supabase } from '../lib/supabase'
+import api from '../lib/api'
 
 const MAIL_EVENTS = [
   {
     value: 'selection_submitted',
     label: '客戶提交影片選擇',
-    description: '客戶完成影片挑選後通知相關人員（預設：系統管理員、該批次上傳者）',
+    description: '客戶完成影片挑選後通知相關人員（預設：所有系統管理員、該批次上傳者）',
   },
   {
     value: 'batch_uploaded',
     label: '新影片清單上傳',
-    description: '有新的影片清單上架時通知輸控團隊（預設：通知所有使用者，實際寄信時會排除上傳者本人）',
+    description: '有新的影片清單上架時通知內部人員（預設：所有管理員與上傳者，實際寄信時會排除本次上傳者本人。客戶會收到另一封專屬通知）',
   },
 ]
 
@@ -65,6 +67,13 @@ export default function MailManagement() {
   const [userSelectState, setUserSelectState] = useState(initialUserSelectState)
   const [submitting, setSubmitting] = useState(false)
   const [pendingDelete, setPendingDelete] = useState(null)
+  
+  // 補發通知相關狀態
+  const [allUsers, setAllUsers] = useState([])
+  const [batches, setBatches] = useState([])
+  const [selectedBatch, setSelectedBatch] = useState('')
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [sendingTo, setSendingTo] = useState(null) // 正在發送給哪個使用者
 
   const uploaderEmails = useMemo(() => {
     return availableUsers
@@ -75,7 +84,38 @@ export default function MailManagement() {
   useEffect(() => {
     loadMailRules()
     loadReminderSettings()
+    loadUsersAndBatches()
   }, [])
+  
+  async function loadUsersAndBatches() {
+    try {
+      setLoadingUsers(true)
+      
+      // 載入所有使用者
+      const { data: usersData, error: usersError } = await supabase
+        .from('profiles')
+        .select('id, name, email, role')
+        .order('role', { ascending: true })
+        .order('name', { ascending: true })
+      
+      if (usersError) throw usersError
+      setAllUsers(usersData || [])
+      
+      // 載入批次清單
+      const batchesResponse = await getBatches()
+      setBatches(batchesResponse.data || [])
+      
+      // 預設選擇最新批次
+      if (batchesResponse.data && batchesResponse.data.length > 0) {
+        setSelectedBatch(batchesResponse.data[0].id)
+      }
+    } catch (error) {
+      console.error('載入使用者或批次失敗:', error)
+      showToast('載入資料失敗', 'error')
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
 
   // ... (loadReminderSettings)
 
@@ -354,6 +394,41 @@ export default function MailManagement() {
       setPendingDelete(null)
     }
   }
+  
+  async function handleResendToUser(userId) {
+    if (!selectedBatch) {
+      showToast('請先選擇批次', 'warning')
+      return
+    }
+    
+    const user = allUsers.find(u => u.id === userId)
+    const batch = batches.find(b => b.id === selectedBatch)
+    
+    if (!user || !batch) {
+      showToast('找不到使用者或批次', 'error')
+      return
+    }
+    
+    try {
+      setSendingTo(userId)
+      
+      // 呼叫後端 API 發送單一使用者通知
+      await api.post('/api/mail-rules/notifications/resend-to-user', {
+        userId: user.id,
+        userEmail: user.email,
+        userName: user.name,
+        batchId: batch.id,
+        batchName: batch.name
+      })
+      
+      showToast(`已成功發送通知給 ${user.name}`, 'success')
+    } catch (error) {
+      console.error('發送通知失敗:', error)
+      showToast(error.response?.data?.message || '發送通知失敗', 'error')
+    } finally {
+      setSendingTo(null)
+    }
+  }
 
   const groupedRules = useMemo(() => {
     return MAIL_EVENTS.map((event) => ({
@@ -561,6 +636,103 @@ export default function MailManagement() {
         )}
       </section>
 
+      {/* 補發通知卡片 */}
+      <section className="card bg-white border-blue-100 shadow-sm">
+        <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+          <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+            <Send className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">補發上傳通知</h2>
+            <p className="text-sm text-gray-500">針對個別使用者補發「新的影片清單已上傳」通知</p>
+          </div>
+        </div>
+
+        {loadingUsers ? (
+          <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
+            <Loader className="h-5 w-5 animate-spin" />
+            載入使用者資料中...
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* 批次選擇器 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                選擇批次
+              </label>
+              <Select
+                value={selectedBatch}
+                onChange={(e) => setSelectedBatch(e.target.value)}
+                options={[
+                  { value: '', label: '請選擇批次' },
+                  ...batches.map((batch) => ({
+                    value: batch.id,
+                    label: `${batch.name} (${new Date(batch.created_at).toLocaleDateString('zh-TW')})`
+                  }))
+                ]}
+              />
+              <p className="text-xs text-gray-500 mt-1.5">
+                💡 選擇要補發通知的影片清單批次
+              </p>
+            </div>
+
+            {/* 使用者列表 */}
+            <div>
+              <p className="text-sm font-medium text-gray-700 mb-3">所有使用者</p>
+              <div className="space-y-2 max-h-80 overflow-y-auto border border-gray-100 rounded-lg p-3 bg-gray-50">
+                {allUsers.map((user) => (
+                  <div
+                    key={user.id}
+                    className="flex items-center justify-between gap-4 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 px-4 py-2.5 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                      <div className={`p-1.5 rounded-full flex-shrink-0 ${
+                        user.role === 'admin' ? 'bg-purple-100 text-purple-600' :
+                        user.role === 'uploader' ? 'bg-blue-100 text-blue-600' :
+                        'bg-green-100 text-green-600'
+                      }`}>
+                        <User className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <span className="font-medium text-gray-900 flex-shrink-0">{user.name}</span>
+                        <span className="text-sm text-gray-600 truncate">{user.email}</span>
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                          user.role === 'admin' ? 'bg-purple-50 text-purple-700' :
+                          user.role === 'uploader' ? 'bg-blue-50 text-blue-700' :
+                          'bg-green-50 text-green-700'
+                        }`}>
+                          {user.role === 'admin' ? '管理員' : user.role === 'uploader' ? '上傳者' : '客戶'}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleResendToUser(user.id)}
+                      disabled={!selectedBatch || sendingTo === user.id}
+                      className="btn btn-secondary btn-sm flex items-center gap-1.5 flex-shrink-0"
+                    >
+                      {sendingTo === user.id ? (
+                        <>
+                          <Loader className="h-3.5 w-3.5 animate-spin" />
+                          <span className="text-xs">發送中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send className="h-3.5 w-3.5" />
+                          <span className="text-xs">補發通知</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                ))}
+                {allUsers.length === 0 && (
+                  <p className="text-center text-gray-500 py-8">目前沒有使用者</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+
       {loading ? (
         <div className="flex items-center gap-2 text-gray-500">
           <div className="spinner"></div>
@@ -580,13 +752,13 @@ export default function MailManagement() {
               {event.value === 'selection_submitted' && (
                 <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
                   <ShieldCheck className="h-4 w-4" />
-                  系統預設會通知：管理員 Email（環境變數）與該批次的上傳者，您可以另外加上其他收件人。
+                  系統預設會通知：所有系統管理員（依使用者資料）與該批次的上傳者，您可以另外加上其他收件人。
                 </div>
               )}
               {event.value === 'batch_uploaded' && (
                 <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
                   <ShieldCheck className="h-4 w-4" />
-                  預設會通知所有管理員與上傳者（排除本次上傳者），若需額外通知對象可在此加入。
+                  預設會通知所有管理員與上傳者（排除本次上傳者本人）。客戶會收到另一封「新的影片清單已上傳」通知，無需重複設定。
                 </div>
               )}
             </div>

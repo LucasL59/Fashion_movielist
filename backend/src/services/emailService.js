@@ -198,24 +198,39 @@ function mergeRecipients(...lists) {
 }
 
 /**
- * 通知所有客戶有新的影片清單
+ * 通知所有客戶有新的影片清單（統一通知入口）
  * 
  * @param {string} batchId - 批次 ID
- * @param {string} batchName - 批次名稱
+ * @param {string} batchName - 批次名稱（可選，若無則從資料庫查詢）
+ * @returns {Object} 包含寄送統計的物件 { customersSent, internalSent, totalSent }
  */
-export async function notifyCustomersNewList(batchId, batchName) {
+export async function notifyCustomersNewList(batchId, batchName = null) {
   try {
+    // 查詢批次資訊（包含上傳者）
+    const { data: batch, error: batchError } = await supabase
+      .from('batches')
+      .select('id, name, uploader_id')
+      .eq('id', batchId)
+      .maybeSingle();
+
+    if (batchError) throw batchError;
+    if (!batch) {
+      throw new Error('找不到指定的批次');
+    }
+
+    const finalBatchName = batchName || batch.name;
+    
     // 查詢所有客戶
-    const { data: customers, error } = await supabase
+    const { data: customers, error: customersError } = await supabase
       .from('profiles')
       .select('email, name')
       .eq('role', 'customer');
     
-    if (error) throw error;
+    if (customersError) throw customersError;
     
     if (!customers || customers.length === 0) {
       console.log('沒有客戶需要通知');
-      return;
+      return { customersSent: 0, internalSent: 0, totalSent: 0 };
     }
     
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -246,7 +261,7 @@ export async function notifyCustomersNewList(batchId, batchName) {
               </div>
               <div class="content">
                 <p>親愛的 ${customer.name || '客戶'}，您好：</p>
-                <p>最新的影片清單 <strong>${batchName}</strong> 已上線，歡迎登入系統挑選本月想要播放的片單。</p>
+                <p>最新的影片清單 <strong>${finalBatchName}</strong> 已上線，歡迎登入系統挑選本月想要播放的片單。</p>
                 <div style="text-align: center; margin: 28px 0;">
                   <a href="${frontendUrl}/movies" class="button">立即挑選影片</a>
                 </div>
@@ -264,7 +279,7 @@ export async function notifyCustomersNewList(batchId, batchName) {
       
       return sendEmail({
         to: customer.email,
-        subject: `新的影片清單已上傳 - ${batchName}`,
+        subject: `新的影片清單已上傳 - ${finalBatchName}`,
         body: emailBody
       });
     });
@@ -272,21 +287,32 @@ export async function notifyCustomersNewList(batchId, batchName) {
     await Promise.all(emailPromises);
     console.log(`✅ 已發送通知給 ${customers.length} 位客戶`);
 
-    // 通知內部訂閱者（預設 + 自訂）
-    const { data: batch } = await supabase
-      .from('batches')
-      .select('id, uploader_id')
-      .eq('id', batchId)
-      .maybeSingle();
-
+    // 通知所有非客戶使用者（管理員、上傳者，排除本次上傳者本人）
     const uploaderProfile = await getUploaderByBatch(batch);
-    const defaultStaff = await getStaffRecipients(
-      uploaderProfile?.id ? [uploaderProfile.id] : []
-    );
+    const uploaderIdToExclude = uploaderProfile?.id ? [uploaderProfile.id] : [];
+    
+    // 取得所有非客戶使用者（排除本次上傳者）
+    const { data: allUsers, error: usersError } = await supabase
+      .from('profiles')
+      .select('id, email, name, role')
+      .order('name', { ascending: true });
+    
+    if (usersError) throw usersError;
+    
+    const defaultRecipients = (allUsers || [])
+      .filter((user) => user.role !== 'customer') // 排除客戶，避免重複通知
+      .filter((user) => !uploaderIdToExclude.includes(user.id))
+      .filter((user) => user.email);
+    
+    // 合併郵件管理中的額外收件人
+    const extraRecipients = await getMailRecipientsByEvent(MAIL_EVENT_TYPES.BATCH_UPLOADED);
+    
     const internalRecipients = mergeRecipients(
-      defaultStaff.map((staff) => staff.email),
-      await getMailRecipientsByEvent(MAIL_EVENT_TYPES.BATCH_UPLOADED)
+      defaultRecipients.map((user) => user.email),
+      extraRecipients
     );
+
+    let internalSentCount = 0;
 
     if (internalRecipients.length > 0) {
       const { count: videoCount } = await supabase
@@ -313,7 +339,7 @@ export async function notifyCustomersNewList(batchId, batchName) {
             <div class="card">
               <h1>新影片清單通知</h1>
               <div class="info">
-                <p><strong>清單名稱：</strong>${batchName}</p>
+                <p><strong>清單名稱：</strong>${finalBatchName}</p>
                 <p><strong>影片數量：</strong>${videoCount || 0} 部</p>
                 <p><strong>通知時間：</strong>${new Date().toLocaleString('zh-TW')}</p>
               </div>
@@ -328,12 +354,21 @@ export async function notifyCustomersNewList(batchId, batchName) {
         internalRecipients.map((email) =>
           sendEmail({
             to: email,
-            subject: `新影片清單已上線 - ${batchName}`,
+            subject: `新影片清單已上線 - ${finalBatchName}`,
             body: internalBody,
           })
         )
       );
+      
+      internalSentCount = internalRecipients.length;
+      console.log(`✅ 已發送內部通知給 ${internalSentCount} 位人員`);
     }
+    
+    return {
+      customersSent: customers.length,
+      internalSent: internalSentCount,
+      totalSent: customers.length + internalSentCount
+    };
     
   } catch (error) {
     console.error('通知客戶錯誤:', error);
