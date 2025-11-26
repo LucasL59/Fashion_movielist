@@ -69,13 +69,18 @@ export async function getGraphClient() {
 export async function sendEmail({ to, subject, body, from, fromName }) {
   const client = await getGraphClient();
   const displayName = fromName || process.env.SENDER_NAME || 'MVI 影片清單系統';
-  
-  // 優先使用參數 from，然後是 SENDER_EMAIL，最後是 ADMIN_EMAIL
-  let senderEmail = from || process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL;
-  
-  const message = {
+
+  const aliasEmail = from || process.env.SENDER_EMAIL || process.env.ADMIN_EMAIL;
+  const principalEmail =
+    process.env.SENDER_PRINCIPAL_EMAIL || process.env.ADMIN_EMAIL || aliasEmail;
+
+  if (!principalEmail) {
+    throw new Error('未設定有效的寄件人帳號 (SENDER_PRINCIPAL_EMAIL 或 ADMIN_EMAIL)');
+  }
+
+  const buildMessage = (fromAddress) => ({
     message: {
-      subject: subject,
+      subject,
       body: {
         contentType: 'HTML',
         content: body
@@ -89,42 +94,40 @@ export async function sendEmail({ to, subject, body, from, fromName }) {
       ],
       from: {
         emailAddress: {
-          address: senderEmail,
+          address: fromAddress,
           name: displayName
         }
       }
     },
     saveToSentItems: 'true'
+  });
+
+  const sendThrough = async (mailboxAddress, fromAddress) => {
+    await client.api(`/users/${mailboxAddress}/sendMail`).post(buildMessage(fromAddress));
+    console.log(`✅ Email 已發送至 ${to} (寄件人: ${displayName} <${fromAddress}>)`);
   };
-  
+
   try {
-    await client
-      .api(`/users/${senderEmail}/sendMail`)
-      .post(message);
-    
-    console.log(`✅ Email 已發送至 ${to} (寄件人: ${displayName} <${senderEmail}>)`);
+    await sendThrough(principalEmail, aliasEmail);
     return { success: true };
   } catch (error) {
-    // 如果使用 SENDER_EMAIL 失敗，且不是直接指定的 from，則嘗試使用 ADMIN_EMAIL
-    if (senderEmail === process.env.SENDER_EMAIL && process.env.ADMIN_EMAIL && !from) {
-      console.warn(`⚠️ 使用 ${senderEmail} 發送失敗，嘗試使用 ${process.env.ADMIN_EMAIL}`);
-      
+    const shouldFallback =
+      !from && process.env.ADMIN_EMAIL && principalEmail !== process.env.ADMIN_EMAIL;
+
+    if (shouldFallback) {
+      console.warn(
+        `⚠️ 使用 ${principalEmail} 發送失敗，嘗試使用 ${process.env.ADMIN_EMAIL}`
+      );
+
       try {
-        senderEmail = process.env.ADMIN_EMAIL;
-        message.message.from.emailAddress.address = senderEmail;
-        
-        await client
-          .api(`/users/${senderEmail}/sendMail`)
-          .post(message);
-        
-        console.log(`✅ Email 已發送至 ${to} (寄件人: ${displayName} <${senderEmail}>)`);
+        await sendThrough(process.env.ADMIN_EMAIL, process.env.ADMIN_EMAIL);
         return { success: true };
       } catch (fallbackError) {
-        console.error('使用備用郵件地址發送失敗:', fallbackError);
+        console.error('使用備用帳號發送失敗:', fallbackError);
         throw new Error(`發送 Email 失敗: ${fallbackError.message}`);
       }
     }
-    
+
     console.error('發送 Email 失敗:', error);
     throw new Error(`發送 Email 失敗: ${error.message}`);
   }
