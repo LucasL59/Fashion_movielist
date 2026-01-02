@@ -20,11 +20,14 @@ const router = express.Router();
  */
 router.get('/latest', async (req, res) => {
   try {
-    // 獲取最新批次
+    console.log(`🔍 [videos/latest] 查詢最新批次`);
+    
+    // 獲取最新批次（優先使用 is_latest 標記）
     const { data: latestBatch, error: batchError } = await supabase
       .from('batches')
       .select('*')
       .eq('status', 'active')
+      .eq('is_latest', true)
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
@@ -32,6 +35,7 @@ router.get('/latest', async (req, res) => {
     if (batchError) {
       if (batchError.code === 'PGRST116') {
         // 沒有找到批次
+        console.log(`⚠️ [videos/latest] 未找到最新批次`);
         return res.json({
           success: true,
           data: {
@@ -48,9 +52,11 @@ router.get('/latest', async (req, res) => {
       .from('videos')
       .select('*')
       .eq('batch_id', latestBatch.id)
-      .order('created_at', { ascending: true });
+      .order('row_number', { ascending: true });
     
     if (videosError) throw videosError;
+    
+    console.log(`✅ [videos/latest] 找到批次 ${latestBatch.name}，包含 ${videos.length} 部影片`);
     
     res.json({
       success: true,
@@ -61,7 +67,7 @@ router.get('/latest', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('獲取影片清單失敗:', error);
+    console.error('❌ [videos/latest] 錯誤:', error);
     res.status(500).json({
       error: 'Internal Server Error',
       message: error.message || '獲取影片清單失敗'
@@ -106,37 +112,42 @@ router.get('/by-month/:month', async (req, res) => {
   try {
     const { month } = req.params;
     
-    // 獲取該月份的批次
-    const { data: batches, error: batchError } = await supabase
+    console.log(`🔍 [videos/by-month] 查詢月份: ${month}`);
+    
+    // 獲取該月份最新的批次（使用 is_latest 標記）
+    const { data: latestBatch, error: batchError } = await supabase
       .from('batches')
       .select('*')
       .eq('month', month)
       .eq('status', 'active')
-      .order('created_at', { ascending: false });
+      .eq('is_latest', true)
+      .single();
     
-    if (batchError) throw batchError;
-    
-    if (!batches || batches.length === 0) {
-      return res.json({
-        success: true,
-        data: {
-          batch: null,
-          videos: []
-        }
-      });
+    if (batchError) {
+      if (batchError.code === 'PGRST116') {
+        // 沒有找到該月份的批次
+        console.log(`⚠️ [videos/by-month] 未找到 ${month} 的批次`);
+        return res.json({
+          success: true,
+          data: {
+            batch: null,
+            videos: []
+          }
+        });
+      }
+      throw batchError;
     }
-    
-    // 使用最新的批次
-    const latestBatch = batches[0];
     
     // 獲取該批次的影片
     const { data: videos, error: videosError } = await supabase
       .from('videos')
       .select('*')
       .eq('batch_id', latestBatch.id)
-      .order('created_at', { ascending: true });
+      .order('row_number', { ascending: true });
     
     if (videosError) throw videosError;
+    
+    console.log(`✅ [videos/by-month] 找到批次 ${latestBatch.name}，包含 ${videos.length} 部影片`);
     
     res.json({
       success: true,
@@ -147,7 +158,7 @@ router.get('/by-month/:month', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('獲取影片清單失敗:', error);
+    console.error('❌ [videos/by-month] 錯誤:', error);
     res.status(500).json({
       error: 'Internal Server Error',
       message: error.message || '獲取影片清單失敗'
@@ -162,24 +173,31 @@ router.get('/by-month/:month', async (req, res) => {
  */
 router.get('/months', async (req, res) => {
   try {
+    console.log(`🔍 [videos/months] 查詢可用月份`);
+    
+    // 只返回最新批次的月份
     const { data: batches, error } = await supabase
       .from('batches')
-      .select('month, created_at')
+      .select('month, name, created_at')
       .eq('status', 'active')
+      .eq('is_latest', true)
       .order('month', { ascending: false });
     
     if (error) throw error;
     
-    // 去重並排序
+    // 提取月份並去重
     const months = [...new Set(batches.map(b => b.month))].filter(Boolean);
+    
+    console.log(`✅ [videos/months] 找到 ${months.length} 個可用月份`);
     
     res.json({
       success: true,
-      data: months
+      data: months,
+      count: months.length
     });
     
   } catch (error) {
-    console.error('獲取月份列表失敗:', error);
+    console.error('❌ [videos/months] 錯誤:', error);
     res.status(500).json({
       error: 'Internal Server Error',
       message: error.message || '獲取月份列表失敗'

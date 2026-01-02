@@ -192,9 +192,67 @@ export async function getPreviousSelection(currentBatchId) {
 
 /**
  * 獲取用戶目前擁有的所有影片（累積）
+ * @deprecated 使用 getCustomerList 代替
  */
 export async function getCurrentOwnedVideos(userId) {
   const response = await api.get(`/api/selections/current-owned/${userId}`)
+  return response.data
+}
+
+/**
+ * 客戶累積清單相關 API
+ */
+
+/**
+ * 獲取客戶當前的累積清單
+ */
+export async function getCustomerList(customerId) {
+  console.log(`🔍 載入客戶清單...`)
+  const response = await api.get(`/api/customer-list/${customerId}`)
+  console.log(`✅ 已載入 ${response.data.count} 部影片`)
+  return response.data
+}
+
+/**
+ * 更新客戶清單（新增或移除影片）
+ */
+export async function updateCustomerList(customerId, { addVideoIds = [], removeVideoIds = [], month = null }) {
+  console.log(`📝 更新客戶清單: 新增 ${addVideoIds.length} 部，移除 ${removeVideoIds.length} 部`)
+  const response = await api.post(`/api/customer-list/${customerId}/update`, {
+    addVideoIds,
+    removeVideoIds,
+    month
+  })
+  return response.data
+}
+
+/**
+ * 提交客戶清單（記錄歷史快照並發送通知）
+ */
+export async function submitCustomerList(customerId, { addedVideos = [], removedVideos = [] }) {
+  console.log(`📤 提交客戶清單: 新增 ${addedVideos.length} 部，移除 ${removedVideos.length} 部`)
+  const response = await api.post(`/api/customer-list/${customerId}/submit`, {
+    addedVideos,
+    removedVideos
+  })
+  return response.data
+}
+
+/**
+ * 獲取客戶的選擇歷史記錄
+ */
+export async function getCustomerListHistory(customerId, limit = 10) {
+  const response = await api.get(`/api/customer-list/${customerId}/history`, {
+    params: { limit }
+  })
+  return response.data
+}
+
+/**
+ * 清空客戶的累積清單
+ */
+export async function clearCustomerList(customerId) {
+  const response = await api.delete(`/api/customer-list/${customerId}/clear`)
   return response.data
 }
 

@@ -18,6 +18,7 @@ dotenv.config();
 import uploadRoutes from './routes/upload.js';
 import videoRoutes from './routes/videos.js';
 import selectionRoutes from './routes/selections.js';
+import customerListRoutes from './routes/customerList.js';
 import reminderRoutes from './routes/reminders.js';
 import dashboardRoutes from './routes/dashboard.js';
 import mailRoutes from './routes/mail.js';
@@ -110,6 +111,7 @@ app.get('/health', (req, res) => {
 app.use('/api/upload', uploadRoutes);
 app.use('/api/videos', videoRoutes);
 app.use('/api/selections', selectionRoutes);
+app.use('/api/customer-list', customerListRoutes);
 app.use('/api/reminders', reminderRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/mail-rules', mailRoutes);

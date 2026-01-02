@@ -30,6 +30,21 @@ export async function parseExcelAndUpload(file, uploaderId, batchName, month) {
       throw new Error('Excel 檔案中沒有工作表');
     }
     
+    // 將同月的舊批次標記為非最新
+    if (month) {
+      const { error: updateError } = await supabase
+        .from('batches')
+        .update({ is_latest: false })
+        .eq('month', month)
+        .eq('status', 'active');
+      
+      if (updateError) {
+        console.warn(`⚠️ 更新舊批次狀態失敗:`, updateError);
+      } else {
+        console.log(`📝 已將 ${month} 的舊批次標記為非最新`);
+      }
+    }
+    
     // 建立新批次
     const { data: batch, error: batchError } = await supabase
       .from('batches')
@@ -37,7 +52,8 @@ export async function parseExcelAndUpload(file, uploaderId, batchName, month) {
         name: batchName,
         month: month,
         uploader_id: uploaderId,
-        status: 'active'
+        status: 'active',
+        is_latest: true
       })
       .select()
       .single();

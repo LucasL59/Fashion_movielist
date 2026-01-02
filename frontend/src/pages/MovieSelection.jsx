@@ -1,223 +1,119 @@
 /**
- * 影片選擇頁面 - Modern Refined
+ * 影片選擇頁面 - 累積清單模式
  * 
- * 顯示影片清單並允許客戶選擇，支援月份選擇
+ * 支援跨月選擇、累積清單管理、明確提交
  */
 
-import { useState, useEffect, useMemo } from 'react'
-import { createPortal } from 'react-dom'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Filter, Send, History, X } from 'lucide-react'
+import { Film, CheckCircle, Loader, ShoppingCart, Calendar, Grid, List as ListIcon, Send, X, AlertTriangle } from 'lucide-react'
 import MovieCard from '../components/MovieCard'
 import Select from '../components/Select'
 import BrandTransition from '../components/BrandTransition'
-import { getLatestVideos, getAvailableMonths, submitSelection, getPreviousSelection, getCurrentOwnedVideos } from '../lib/api'
-import { supabase } from '../lib/supabase'
+import { 
+  getAvailableMonths, 
+  getVideosByMonth,
+  getCustomerList,
+  updateCustomerList,
+  submitCustomerList
+} from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
 
 export default function MovieSelection() {
   const { user } = useAuth()
   const { showToast } = useToast()
-  const [batch, setBatch] = useState(null)
-  const [videos, setVideos] = useState([])
-  const [selectedIds, setSelectedIds] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
   
-  // 月份選擇相關
+  // 當前月份影片
+  const [batch, setBatch] = useState(null)
+  const [monthlyVideos, setMonthlyVideos] = useState([])
+  const [loading, setLoading] = useState(true)
+  
+  // 月份選擇
   const [availableMonths, setAvailableMonths] = useState([])
   const [selectedMonth, setSelectedMonth] = useState('')
   const [loadingMonths, setLoadingMonths] = useState(true)
   
-  const [viewMode, setViewMode] = useState('grid')
+  // 客戶累積清單
+  const [customerList, setCustomerList] = useState([])
+  const [customerVideoIds, setCustomerVideoIds] = useState(new Set())
+  const [loadingCustomerList, setLoadingCustomerList] = useState(false)
   
-  // 目前擁有的片單相關
-  const [ownedVideos, setOwnedVideos] = useState([])
-  const [ownedVideoIds, setOwnedVideoIds] = useState([])
-  const [loadingOwned, setLoadingOwned] = useState(false)
-  const [ownedViewMode, setOwnedViewMode] = useState('grid') // grid 或 list
+  // 待處理變更（未提交）
+  const [pendingChanges, setPendingChanges] = useState({
+    add: new Set(),
+    remove: new Set()
+  })
   
-  // 上月選擇相關（用於郵件通知差異計算）
-  const [previousSelection, setPreviousSelection] = useState(null)
-  const [previousVideos, setPreviousVideos] = useState([])
-  const [previousVideoIds, setPreviousVideoIds] = useState([])
-  
-  // 分頁設定
-  const PAGE_SIZE = 12 // Increased for grid layout
-  const [currentPage, setCurrentPage] = useState(1)
-  const [showAllPages, setShowAllPages] = useState(false)
-  
-  // 確認 Modal
+  // 提交狀態
+  const [submitting, setSubmitting] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   
-  // ---- Helper: Video identity normalization (same film across batches) ----
-  const normalizeVideoKey = (video) => {
-    if (!video) return ''
-    const zh = (video.title || '').trim().toLowerCase()
-    const en = (video.title_en || '').trim().toLowerCase()
-    const duration = video.duration ? String(video.duration).trim().toLowerCase() : ''
-    const rating = video.rating ? String(video.rating).trim().toLowerCase() : ''
-    const combined = `${zh}__${en}__${duration}__${rating}`
-    return combined.replace(/^_+|_+$/g, '')
-  }
-
-  const videoMap = useMemo(() => {
-    const map = new Map()
-    videos.forEach(video => {
-      map.set(video.id, video)
-    })
-    return map
-  }, [videos])
-
-  const ownedVideoIdSet = useMemo(() => new Set(ownedVideoIds), [ownedVideoIds])
-
-  const activeOwnedKeySet = useMemo(() => {
-    const set = new Set()
-    ownedVideos.forEach(video => {
-      if (selectedIds.includes(video.id)) {
-        const key = normalizeVideoKey(video)
-        if (key) set.add(key)
-      }
-    })
-    return set
-  }, [ownedVideos, selectedIds])
-
-  const isVideoAlreadyOwned = (video) => {
-    if (!video) return false
-    if (ownedVideoIdSet.has(video.id)) return true
-    const key = normalizeVideoKey(video)
-    if (!key) return false
-    return activeOwnedKeySet.has(key)
-  }
+  // 視圖模式
+  const [viewMode, setViewMode] = useState('grid')
+  const [ownedViewMode, setOwnedViewMode] = useState('grid')
   
+  // 分頁
+  const PAGE_SIZE = 12
+  const [currentPage, setCurrentPage] = useState(1)
+  const [showAllPages, setShowAllPages] = useState(false)
+
+  // 計算當前選擇的 ID（累積清單 + 待處理新增 - 待處理移除）
+  const currentSelectedIds = useMemo(() => {
+    const ids = new Set(customerVideoIds)
+    pendingChanges.add.forEach(id => ids.add(id))
+    pendingChanges.remove.forEach(id => ids.delete(id))
+    return ids
+  }, [customerVideoIds, pendingChanges])
+
+  // 檢查是否有未提交的變更
+  const hasPendingChanges = useMemo(() => {
+    return pendingChanges.add.size > 0 || pendingChanges.remove.size > 0
+  }, [pendingChanges])
+
+  // 計算差異用於顯示
+  const changesForDisplay = useMemo(() => {
+    const addedVideos = monthlyVideos.filter(v => pendingChanges.add.has(v.id))
+    const removedVideos = customerList.filter(v => pendingChanges.remove.has(v.id))
+    
+    return {
+      added: addedVideos,
+      removed: removedVideos,
+      addedCount: addedVideos.length,
+      removedCount: removedVideos.length
+    }
+  }, [monthlyVideos, customerList, pendingChanges])
+
+  // 載入月份列表
   useEffect(() => {
     loadMonths()
   }, [])
-  
+
+  // 載入客戶累積清單
+  useEffect(() => {
+    if (user) {
+      loadCustomerList()
+    }
+  }, [user])
+
+  // 載入選定月份的影片
   useEffect(() => {
     if (selectedMonth) {
-      loadVideosByMonth(selectedMonth)
+      loadVideosBySelectedMonth(selectedMonth)
     }
   }, [selectedMonth])
-  
-  // 載入當月已選擇的影片與目前擁有的片單
+
+  // 頁面卸載前提示
   useEffect(() => {
-    if (batch && user) {
-      loadCurrentAndOwnedSelection()
-    }
-  }, [batch, user])
-  
-  async function loadCurrentAndOwnedSelection() {
-    try {
-      console.log('🔍 開始載入選擇資料...')
-      console.log('👤 User ID:', user.id)
-      console.log('📦 Batch ID:', batch.id)
-      
-      // 載入當月已選擇的影片
-      const { data, error } = await supabase
-        .from('selections')
-        .select('video_ids')
-        .eq('user_id', user.id)
-        .eq('batch_id', batch.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-      
-      if (error && error.code !== 'PGRST116') {
-        console.error('❌ 載入當月選擇錯誤:', error)
-        throw error
+    const handleBeforeUnload = (e) => {
+      if (hasPendingChanges) {
+        e.preventDefault()
+        e.returnValue = '您有未保存的變更，確定要離開嗎？'
       }
-      
-      if (data && data.length > 0 && data[0].video_ids) {
-        console.log('✅ 找到當月選擇:', data[0].video_ids.length, '部')
-        setSelectedIds(data[0].video_ids)
-      } else {
-        console.log('ℹ️ 當月尚未選擇任何影片')
-      }
-      
-      // 載入目前擁有的所有片單
-      await loadOwnedVideos()
-      
-      // 載入上月選擇（用於郵件通知差異）
-      await loadPreviousMonthSelection()
-    } catch (error) {
-      console.error('❌ 載入選擇失敗:', error)
     }
-  }
-  
-  async function loadOwnedVideos() {
-    if (!user || !user.id) {
-      console.log('⚠️ 無法載入擁有影片：user 或 user.id 不存在')
-      return
-    }
-    
-    try {
-      setLoadingOwned(true)
-      console.log('🔍 開始載入目前擁有的影片...')
-      console.log('👤 User ID:', user.id)
-      
-      const response = await getCurrentOwnedVideos(user.id)
-      
-      console.log('📡 API 回應:', response)
-      
-      if (response.success && response.data) {
-        const { ownedVideos: owned, ownedVideoIds: ownedIds } = response.data
-        
-        console.log('✅ 擁有的影片:', {
-          count: owned?.length || 0,
-          videoIds: ownedIds
-        })
-        
-        if (owned && owned.length > 0) {
-          setOwnedVideos(owned)
-          setOwnedVideoIds(ownedIds)
-          
-          console.log('💾 已設定 ownedVideoIds:', ownedIds)
-          
-          // 預選目前擁有的影片
-          setSelectedIds(prev => {
-            const combined = [...new Set([...prev, ...ownedIds])]
-            console.log('🔄 更新 selectedIds:', {
-              previous: prev.length,
-              owned: ownedIds.length,
-              combined: combined.length
-            })
-            return combined
-          })
-          
-          console.log(`📋 載入目前擁有: ${owned.length} 部影片`)
-        } else {
-          console.log('ℹ️ 目前沒有擁有任何影片')
-        }
-      } else {
-        console.log('⚠️ API 回應格式異常:', response)
-      }
-    } catch (error) {
-      console.error('❌ 載入擁有影片失敗:', error)
-    } finally {
-      setLoadingOwned(false)
-    }
-  }
-  
-  async function loadPreviousMonthSelection() {
-    if (!batch || !batch.id) return
-    
-    try {
-      const response = await getPreviousSelection(batch.id)
-      
-      if (response.success && response.data) {
-        const { previousSelection: prevSel, previousVideos: prevVids } = response.data
-        
-        if (prevSel && prevVids && prevVids.length > 0) {
-          setPreviousSelection(prevSel)
-          setPreviousVideos(prevVids)
-          setPreviousVideoIds(prevSel.video_ids || [])
-        }
-      }
-    } catch (error) {
-      console.error('載入上月選擇失敗:', error)
-    }
-  }
-  
+    window.addEventListener('beforeunload', handleBeforeUnload)
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+  }, [hasPendingChanges])
+
   async function loadMonths() {
     try {
       setLoadingMonths(true)
@@ -225,134 +121,161 @@ export default function MovieSelection() {
       const months = response.data || []
       setAvailableMonths(months)
       
+      // 預設選擇當前月份
       const currentMonth = new Date().toISOString().slice(0, 7)
       if (months.includes(currentMonth)) {
         setSelectedMonth(currentMonth)
       } else if (months.length > 0) {
         setSelectedMonth(months[0])
-      } else {
-        loadVideos()
       }
     } catch (error) {
-      console.error('載入月份列表失敗:', error)
-      loadVideos()
+      console.error('❌ 載入月份列表失敗:', error)
+      showToast('載入月份列表失敗', 'error')
     } finally {
       setLoadingMonths(false)
     }
   }
-  
-  async function loadVideos() {
+
+  async function loadCustomerList() {
+    if (!user?.id) return
+    
     try {
-      setLoading(true)
-      const response = await getLatestVideos()
-      setBatch(response.data.batch)
-      setVideos(response.data.videos || [])
-      setSelectedIds([])
-      setCurrentPage(1)
-      setShowAllPages(false)
-    } catch (error) {
-      console.error('載入影片失敗:', error)
-      showToast('載入影片清單失敗', 'error')
-    } finally {
-      setLoading(false)
-    }
-  }
-  
-  async function loadVideosByMonth(month) {
-    try {
-      setLoading(true)
-      const { getVideosByMonth } = await import('../lib/api')
-      let response;
+      setLoadingCustomerList(true)
+      const response = await getCustomerList(user.id)
       
-      if (getVideosByMonth) {
-        response = await getVideosByMonth(month)
-      } else {
-         response = await getLatestVideos()
+      if (response.success && response.data) {
+        setCustomerList(response.data)
+        const videoIds = new Set(response.data.map(v => v.id))
+        setCustomerVideoIds(videoIds)
+        console.log(`✅ 已載入客戶清單: ${response.data.length} 部影片`)
       }
-      
-      setBatch(response.data.batch)
-      setVideos(response.data.videos || [])
-      
-      // 清空資料
-      setPreviousSelection(null)
-      setPreviousVideos([])
-      setPreviousVideoIds([])
-      setOwnedVideos([])
-      setOwnedVideoIds([])
-      
-      setSelectedIds([])
-      setCurrentPage(1)
-      setShowAllPages(false)
     } catch (error) {
-      console.error('載入特定月份影片失敗:', error)
+      console.error('❌ 載入客戶清單失敗:', error)
+      showToast('載入您的影片清單失敗', 'error')
+    } finally {
+      setLoadingCustomerList(false)
+    }
+  }
+
+  async function loadVideosBySelectedMonth(month) {
+    try {
+      setLoading(true)
+      console.log(`🔍 載入 ${month} 的影片...`)
+      
+      const response = await getVideosByMonth(month)
+      
+      if (response.success) {
+        setBatch(response.data.batch)
+        setMonthlyVideos(response.data.videos || [])
+        setCurrentPage(1)
+        setShowAllPages(false)
+        
+        console.log(`✅ 已載入 ${response.data.videos.length} 部影片`)
+      }
+    } catch (error) {
+      console.error('❌ 載入影片失敗:', error)
       showToast('載入影片清單失敗', 'error')
     } finally {
       setLoading(false)
     }
   }
-  
+
   function handleToggle(videoId) {
     if (submitting) return
     
-    const isCurrentlySelected = selectedIds.includes(videoId)
+    const isInCustomerList = customerVideoIds.has(videoId)
+    const isInPendingAdd = pendingChanges.add.has(videoId)
+    const isInPendingRemove = pendingChanges.remove.has(videoId)
     
-    if (!isCurrentlySelected) {
-      const video = videoMap.get(videoId)
-      if (video) {
-        const key = normalizeVideoKey(video)
-        const hasActiveOwned = ownedVideoIdSet.has(videoId) || (key && activeOwnedKeySet.has(key))
-        if (hasActiveOwned) {
-          showToast('這部影片已在您的「目前擁有」清單中，如要改選請先在上方取消勾選舊的版本', 'warning')
-          return
+    setPendingChanges(prev => {
+      const newAdd = new Set(prev.add)
+      const newRemove = new Set(prev.remove)
+      
+      if (isInCustomerList) {
+        // 已在累積清單中
+        if (isInPendingRemove) {
+          // 取消移除 = 恢復
+          newRemove.delete(videoId)
+        } else {
+          // 標記為移除
+          newRemove.add(videoId)
+        }
+      } else {
+        // 不在累積清單中
+        if (isInPendingAdd) {
+          // 取消新增
+          newAdd.delete(videoId)
+        } else {
+          // 標記為新增
+          newAdd.add(videoId)
         }
       }
-    }
-    
-    setSelectedIds(prev => {
-      if (prev.includes(videoId)) {
-        return prev.filter(id => id !== videoId)
-      } else {
-        return [...prev, videoId]
-      }
+      
+      return { add: newAdd, remove: newRemove }
     })
   }
-  
+
   function handleSubmitClick() {
-    // 若有目前擁有的片單，先顯示確認 Modal
-    if (ownedVideos.length > 0) {
-      setShowConfirmModal(true)
-    } else {
-      handleSubmit()
+    if (!hasPendingChanges) {
+      showToast('沒有需要提交的變更', 'info')
+      return
     }
+    setShowConfirmModal(true)
   }
-  
+
   async function handleSubmit() {
-    if (!batch) return
+    if (!user?.id) return
     
     try {
       setSubmitting(true)
       setShowConfirmModal(false)
       
-      await submitSelection({ 
-        userId: user.id,
-        batchId: batch.id, 
-        videoIds: selectedIds,
-        customerName: user.name || user.email, // Fallback to email if name is missing
-        customerEmail: user.email
+      const addVideoIds = Array.from(pendingChanges.add)
+      const removeVideoIds = Array.from(pendingChanges.remove)
+      
+      console.log(`📤 提交變更: 新增 ${addVideoIds.length} 部，移除 ${removeVideoIds.length} 部`)
+      
+      // 1. 更新客戶清單
+      await updateCustomerList(user.id, {
+        addVideoIds,
+        removeVideoIds,
+        month: selectedMonth
       })
       
-      showToast('影片選擇已提交成功！', 'success')
+      // 2. 提交清單（記錄歷史快照）
+      const addedVideosDetails = changesForDisplay.added.map(v => ({
+        id: v.id,
+        title: v.title,
+        title_en: v.title_en
+      }))
       
-      // 重新載入擁有的片單
-      await loadOwnedVideos()
+      const removedVideosDetails = changesForDisplay.removed.map(v => ({
+        id: v.id,
+        title: v.title,
+        title_en: v.title_en
+      }))
+      
+      await submitCustomerList(user.id, {
+        addedVideos: addedVideosDetails,
+        removedVideos: removedVideosDetails
+      })
+      
+      showToast('影片清單已成功提交！', 'success')
+      
+      // 3. 重新載入客戶清單
+      await loadCustomerList()
+      
+      // 4. 清空待處理變更
+      setPendingChanges({ add: new Set(), remove: new Set() })
+      
     } catch (error) {
-      console.error('提交選擇失敗:', error)
+      console.error('❌ 提交失敗:', error)
       showToast('提交失敗，請稍後再試', 'error')
     } finally {
       setSubmitting(false)
     }
   }
-  
+
   function formatMonth(monthStr) {
     if (!monthStr) return ''
     const [year, month] = monthStr.split('-')
@@ -360,55 +283,23 @@ export default function MovieSelection() {
   }
 
   // 分頁邏輯
-  const totalPages = Math.ceil(videos.length / PAGE_SIZE)
+  const totalPages = Math.ceil(monthlyVideos.length / PAGE_SIZE)
   const displayedVideos = showAllPages 
-    ? videos 
-    : videos.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+    ? monthlyVideos 
+    : monthlyVideos.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
   
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1)
 
-  // 計算差異
-  const currentVideoIds = videos.map(v => v.id)
-  
-  // 將下架的影片：目前擁有但未被選中的
-  const removedVideos = ownedVideos.filter(v => !selectedIds.includes(v.id))
-  
-  // 保留的影片：目前擁有且仍被選中的
-  const keptVideos = ownedVideos.filter(v => selectedIds.includes(v.id))
-  
-  // 新增的影片：被選中但不在目前擁有中的（真正的新增）
-  const addedVideos = videos.filter(v => {
-    const isSelected = selectedIds.includes(v.id)
-    if (!isSelected) return false
-    
-    const alreadyOwned = isVideoAlreadyOwned(v)
-    
-    if (alreadyOwned) {
-      console.log(`🔵 ${v.title} 已擁有且被選中 (應該留在保留區)`)
-      return false
-    }
-    
-    console.log(`🟢 ${v.title} 被視為新增影片`)
-    return true
-  })
-  
-  console.log('📊 差異計算:', {
-    ownedVideoIdCount: ownedVideoIdSet.size,
-    selectedIdCount: selectedIds.length,
-    removed: removedVideos.length,
-    kept: keptVideos.length,
-    added: addedVideos.length
-  })
-  
-  console.log('🎬 目前擁有的影片 ID:', Array.from(ownedVideoIdSet))
-  console.log('✅ 已選擇的影片 ID:', selectedIds)
+  if (loadingMonths) {
+    return <BrandTransition isVisible={true} />
+  }
 
   return (
     <div className="space-y-8 pb-24">
-      <BrandTransition isVisible={loading || loadingMonths} />
+      <BrandTransition isVisible={loading} />
       
-      {/* 目前擁有的片單區塊 */}
-      {ownedVideos.length > 0 && (
+      {/* 客戶累積清單區塊 */}
+      {customerList.length > 0 && (
         <div className="glass-panel rounded-2xl p-6 border-2 border-blue-200/50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -416,8 +307,10 @@ export default function MovieSelection() {
                 <ShoppingCart className="h-5 w-5" />
               </div>
               <div>
-                <h3 className="font-bold text-lg text-gray-900">目前擁有的片單</h3>
-                <p className="text-sm text-gray-500">共 {ownedVideos.length} 部影片 · 點擊可取消下架</p>
+                <h3 className="font-bold text-lg text-gray-900">目前的影片清單</h3>
+                <p className="text-sm text-gray-500">
+                  共 {currentSelectedIds.size} 部影片 · 點擊可取消選擇
+                </p>
               </div>
             </div>
             
@@ -448,15 +341,16 @@ export default function MovieSelection() {
           
           {ownedViewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {ownedVideos.map((video) => {
-                const isStillSelected = selectedIds.includes(video.id)
+              {customerList.map((video) => {
+                const isSelected = currentSelectedIds.has(video.id)
+                const isPendingRemove = pendingChanges.remove.has(video.id)
                 
                 return (
                   <div
                     key={video.id}
                     onClick={() => handleToggle(video.id)}
                     className={`relative bg-white rounded-xl overflow-hidden transition-all duration-200 border-2 cursor-pointer hover:shadow-lg ${
-                      isStillSelected
+                      isSelected && !isPendingRemove
                         ? 'border-blue-400 shadow-md'
                         : 'border-gray-200 opacity-60'
                     }`}
@@ -470,7 +364,7 @@ export default function MovieSelection() {
                         </div>
                       )}
                       
-                      {isStillSelected ? (
+                      {isSelected && !isPendingRemove ? (
                         <div className="absolute inset-0 bg-blue-500/10 backdrop-blur-[1px] flex items-center justify-center">
                           <div className="bg-blue-500 text-white rounded-full p-1.5">
                             <CheckCircle className="h-5 w-5" />
@@ -497,37 +391,33 @@ export default function MovieSelection() {
             </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {ownedVideos.map((video) => {
-                const isStillSelected = selectedIds.includes(video.id)
+              {customerList.map((video) => {
+                const isSelected = currentSelectedIds.has(video.id)
+                const isPendingRemove = pendingChanges.remove.has(video.id)
                 
                 return (
                   <div
                     key={video.id}
                     onClick={() => handleToggle(video.id)}
-                    className={`flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all ${
-                      isStillSelected
-                        ? 'border-blue-400 bg-blue-50'
-                        : 'border-gray-200 bg-gray-50 opacity-60'
+                    className={`flex items-center gap-3 p-3 rounded-lg transition-all cursor-pointer ${
+                      isSelected && !isPendingRemove
+                        ? 'bg-blue-50 border-2 border-blue-200'
+                        : 'bg-gray-50 border-2 border-transparent opacity-60'
                     }`}
                   >
-                    <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                      {video.thumbnail_url ? (
-                        <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                    <div className={`flex-shrink-0 ${isSelected && !isPendingRemove ? 'text-blue-500' : 'text-red-500'}`}>
+                      {isSelected && !isPendingRemove ? (
+                        <CheckCircle className="h-5 w-5" />
                       ) : (
-                        <Film className="m-auto h-6 w-6 text-gray-400" />
+                        <X className="h-5 w-5" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm text-gray-900">{video.title}</div>
+                      <h4 className="font-medium text-gray-900">{video.title}</h4>
                       {video.title_en && (
-                        <div className="text-xs text-gray-500">{video.title_en}</div>
+                        <p className="text-sm text-gray-500">{video.title_en}</p>
                       )}
                     </div>
-                    {isStillSelected ? (
-                      <CheckCircle className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                    ) : (
-                      <X className="h-5 w-5 text-red-500 flex-shrink-0" />
-                    )}
                   </div>
                 )
               })}
@@ -535,429 +425,254 @@ export default function MovieSelection() {
           )}
         </div>
       )}
-      
-      {/* 說明提示 */}
-      {ownedVideos.length > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-          <div className="bg-blue-100 text-blue-600 p-2 rounded-lg flex-shrink-0">
-            <AlertCircle className="h-5 w-5" />
-          </div>
-          <div className="flex-1">
-            <h4 className="font-semibold text-blue-900 mb-1">選片說明</h4>
-            <p className="text-sm text-blue-700">
-              標示為 <span className="inline-flex items-center gap-1 bg-blue-600 text-white text-xs px-2 py-0.5 rounded-full font-semibold">已擁有</span> 的影片表示您已經選過，不需要重複選擇。若要下架這些影片，請在上方「目前擁有的片單」區塊中取消勾選。
-            </p>
+
+      {/* 月份選擇 */}
+      <div className="glass-panel rounded-2xl p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <div className="bg-purple-100 text-purple-700 p-2 rounded-lg">
+              <Calendar className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-gray-900">選擇月份</h3>
+              <p className="text-sm text-gray-500">從任何月份選擇影片加入您的清單</p>
+            </div>
           </div>
         </div>
-      )}
-      
-      {/* 頂部控制列 - Glass Panel */}
-      <div className="sticky top-24 z-30 glass-panel rounded-2xl p-4 mb-8 transition-all duration-300">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          
-          {/* 左側：月份選擇 */}
-          <div className="flex items-center gap-3">
-            <div className="w-[200px]">
-              <Select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                options={availableMonths.map(month => ({ value: month, label: formatMonth(month) }))}
-                placeholder="選擇月份"
-              />
+
+        <div className="flex flex-wrap gap-2">
+          {availableMonths.map((month) => (
+            <button
+              key={month}
+              onClick={() => setSelectedMonth(month)}
+              className={`px-4 py-2 rounded-xl font-medium transition-all ${
+                selectedMonth === month
+                  ? 'bg-purple-500 text-white shadow-md'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {formatMonth(month)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* 當前月份影片清單 */}
+      {batch && (
+        <div className="glass-panel rounded-2xl p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">{batch.name}</h2>
+              <p className="text-gray-500 mt-1">
+                共 {monthlyVideos.length} 部影片 · 已選擇 {currentSelectedIds.size} 部
+              </p>
             </div>
             
-            <div className="hidden md:block h-8 w-px bg-gray-200 mx-2"></div>
-            
-            <div className="flex items-center text-sm text-gray-500">
-              <Filter className="h-4 w-4 mr-2" />
-              <span>共 {videos.length} 部影片</span>
-            </div>
-          </div>
-
-          {/* 右側：視圖切換與分頁 */}
-          <div className="flex items-center gap-3 justify-end w-full md:w-auto">
-            {/* 分頁按鈕 */}
-            {totalPages > 1 && (
-              <div className="flex bg-gray-100/80 p-1 rounded-xl items-center mr-2 overflow-x-auto max-w-[200px] sm:max-w-none scrollbar-hide">
-                {pageNumbers.map((page) => (
-                  <button
-                    key={page}
-                    onClick={() => {
-                      setCurrentPage(page)
-                      setShowAllPages(false)
-                    }}
-                    className={`min-w-[2rem] h-8 rounded-lg text-sm font-medium transition-all flex-shrink-0 ${
-                      currentPage === page && !showAllPages
-                        ? 'bg-white text-primary-600 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ))}
-                <button
-                    onClick={() => setShowAllPages(!showAllPages)}
-                    className={`px-3 h-8 rounded-lg text-xs font-medium transition-all ml-1 whitespace-nowrap ${
-                      showAllPages
-                        ? 'bg-white text-primary-600 shadow-sm'
-                        : 'text-gray-500 hover:text-gray-700'
-                    }`}
-                  >
-                    全部
-                </button>
-              </div>
-            )}
-
             {/* 視圖切換 */}
-            <div className="bg-gray-100/80 p-1 rounded-xl flex items-center flex-shrink-0">
+            <div className="bg-gray-100/80 p-1 rounded-xl flex items-center">
               <button
                 onClick={() => setViewMode('grid')}
                 className={`p-2 rounded-lg transition-all ${
                   viewMode === 'grid'
-                    ? 'bg-white text-primary-600 shadow-sm'
+                    ? 'bg-white text-blue-600 shadow-sm'
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                <Grid className="h-5 w-5" />
+                <Grid className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setViewMode('list')}
                 className={`p-2 rounded-lg transition-all ${
                   viewMode === 'list'
-                    ? 'bg-white text-primary-600 shadow-sm'
+                    ? 'bg-white text-blue-600 shadow-sm'
                     : 'text-gray-400 hover:text-gray-600'
                 }`}
               >
-                <ListIcon className="h-5 w-5" />
+                <ListIcon className="h-4 w-4" />
               </button>
             </div>
           </div>
-        </div>
-      </div>
-      
-      {/* 影片列表內容 */}
-      {!loading && (!batch || videos.length === 0) ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center">
-          <div className="bg-gray-100 p-6 rounded-full mb-6">
-            <Film className="h-12 w-12 text-gray-300" />
-          </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">暫無影片</h2>
-          <p className="text-gray-500 max-w-md">
-            {selectedMonth ? `${formatMonth(selectedMonth)}目前沒有可供選擇的影片。` : '請稍後再回來查看。'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {viewMode === 'grid' ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-              {displayedVideos.map((video) => (
+
+          {/* 影片列表 */}
+          <div className={viewMode === 'grid' 
+            ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4"
+            : "space-y-2"
+          }>
+            {displayedVideos.map((video) => {
+              const isSelected = currentSelectedIds.has(video.id)
+              const isAlreadyOwned = customerVideoIds.has(video.id)
+              const isPendingAdd = pendingChanges.add.has(video.id)
+              
+              return viewMode === 'grid' ? (
                 <MovieCard
                   key={video.id}
                   video={video}
-                  isSelected={selectedIds.includes(video.id)}
+                  isSelected={isSelected}
+                  isAlreadyOwned={isAlreadyOwned}
                   onToggle={handleToggle}
-                  isAlreadyOwned={isVideoAlreadyOwned(video)}
+                  disabled={submitting}
                 />
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4 max-w-4xl mx-auto">
-              {displayedVideos.map((video) => {
-                const isOwned = isVideoAlreadyOwned(video)
-                const isSelected = selectedIds.includes(video.id)
-                
-                return (
-                  <div
-                    key={video.id}
-                    onClick={() => handleToggle(video.id)}
-                    className={`group relative bg-white rounded-2xl p-4 flex gap-4 transition-all duration-200 hover:shadow-md cursor-pointer border ${
-                      isSelected
-                        ? isOwned
-                          ? 'border-blue-500 ring-1 ring-blue-500 bg-blue-50/10'
-                          : 'border-primary-500 ring-1 ring-primary-500 bg-primary-50/10'
-                        : 'border-gray-100'
-                    }`}
-                  >
-                    <div className="w-24 h-36 flex-shrink-0 bg-gray-100 rounded-xl overflow-hidden">
-                      {video.thumbnail_url ? (
-                        <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <Film className="m-auto h-8 w-8 text-gray-300" />
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0 py-1">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-bold text-lg text-gray-900">{video.title}</h3>
-                            {isOwned && (
-                              <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${isSelected ? 'bg-blue-600 text-white' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}>
-                                已擁有
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-500">{video.title_en}</p>
-                        </div>
-                        {isSelected && (
-                          <div className={`rounded-full p-1 ${
-                            isOwned ? 'bg-blue-500 text-white' : 'bg-primary-500 text-white'
-                          }`}>
-                            <CheckCircle className="h-5 w-5" />
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">{video.description}</p>
-                      <div className="mt-auto pt-3 flex gap-3 text-xs text-gray-500">
-                        {video.duration && <span>{video.duration} 分鐘</span>}
-                        {video.rating && <span>{video.rating}</span>}
-                      </div>
-                    </div>
+              ) : (
+                <div
+                  key={video.id}
+                  onClick={() => handleToggle(video.id)}
+                  className={`flex items-center gap-3 p-3 rounded-lg transition-all cursor-pointer ${
+                    isSelected
+                      ? 'bg-blue-50 border-2 border-blue-200'
+                      : 'bg-white border-2 border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  <div className={`flex-shrink-0 ${isSelected ? 'text-blue-500' : 'text-gray-300'}`}>
+                    <CheckCircle className="h-5 w-5" />
                   </div>
-                )
-              })}
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-medium text-gray-900">{video.title}</h4>
+                    {video.title_en && (
+                      <p className="text-sm text-gray-500">{video.title_en}</p>
+                    )}
+                  </div>
+                  {isAlreadyOwned && (
+                    <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded">已擁有</span>
+                  )}
+                  {isPendingAdd && (
+                    <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">新增</span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* 分頁 */}
+          {totalPages > 1 && !showAllPages && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              {pageNumbers.map(num => (
+                <button
+                  key={num}
+                  onClick={() => setCurrentPage(num)}
+                  className={`px-4 py-2 rounded-lg transition-all ${
+                    currentPage === num
+                      ? 'bg-blue-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                onClick={() => setShowAllPages(true)}
+                className="px-4 py-2 rounded-lg bg-purple-100 text-purple-700 hover:bg-purple-200 transition-all"
+              >
+                顯示全部
+              </button>
             </div>
           )}
         </div>
       )}
-      
-      {createPortal(
-        <div className={`fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-gray-200/50 py-3 px-4 transition-transform duration-300 z-[100] ${
-          selectedIds.length > 0 ? 'translate-y-0' : 'translate-y-full'
-        }`}>
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center justify-between w-full sm:w-auto gap-3">
-              <div className="flex items-center gap-3">
-                <div className="bg-primary-100 text-primary-700 p-2 rounded-lg">
-                  <ShoppingCart className="h-6 w-6" />
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">已選擇</p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {selectedIds.length} <span className="text-base font-normal text-gray-500">部影片</span>
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedIds([])}
-                className="text-sm text-gray-400 hover:text-red-500 transition-colors px-2 sm:hidden"
-              >
-                清除
-              </button>
-            </div>
 
-            <div className="flex items-center gap-4 w-full sm:w-auto">
-              <button
-                onClick={() => setSelectedIds([])}
-                className="hidden sm:block btn-ghost text-sm"
-              >
-                清除全部
-              </button>
-              <button
-                onClick={handleSubmitClick}
-                disabled={submitting || selectedIds.length === 0}
-                className="btn-primary flex-1 sm:flex-none w-full sm:w-auto px-8 py-3 text-base shadow-lg shadow-primary-500/25"
-              >
-                {submitting ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <Loader className="h-5 w-5 animate-spin" />
-                    處理中...
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-2">
-                    提交選擇
-                    <Send className="h-5 w-5 ml-2" />
-                  </div>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      
-      {/* 確認 Modal */}
-      {showConfirmModal && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6">
-          {/* Backdrop */}
-          <div 
-            className="fixed inset-0 bg-black/25 backdrop-blur-sm transition-opacity animate-fade-in" 
-            onClick={() => setShowConfirmModal(false)}
-            aria-hidden="true"
-          />
-
-          {/* Modal Panel */}
-          <div 
-            className="relative w-full max-w-2xl transform rounded-2xl bg-white text-left shadow-xl transition-all border border-gray-100 animate-fade-in max-h-[90vh] flex flex-col"
-            role="dialog"
-            aria-modal="true"
+      {/* 懸浮提交按鈕 */}
+      {hasPendingChanges && (
+        <div className="fixed bottom-6 right-6 z-50">
+          <button
+            onClick={handleSubmitClick}
+            disabled={submitting}
+            className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-8 py-4 rounded-2xl shadow-2xl hover:shadow-3xl transform hover:scale-105 transition-all flex items-center gap-3 font-bold text-lg disabled:opacity-50"
           >
-            {/* Header - Fixed */}
-            <div className="p-6 pb-4 border-b border-gray-100 flex-shrink-0">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xl font-bold leading-6 text-gray-900">
-                  確認影片選擇異動
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 hover:text-gray-500 transition-colors focus:outline-none p-1 rounded-full hover:bg-gray-100"
-                  onClick={() => setShowConfirmModal(false)}
-                >
-                  <X className="h-5 w-5" />
-                </button>
+            {submitting ? (
+              <>
+                <Loader className="h-6 w-6 animate-spin" />
+                處理中...
+              </>
+            ) : (
+              <>
+                <Send className="h-6 w-6" />
+                提交變更 ({changesForDisplay.addedCount + changesForDisplay.removedCount})
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* 懸浮計數器 */}
+      {(hasPendingChanges || currentSelectedIds.size > 0) && (
+        <div className="fixed bottom-24 right-6 bg-white rounded-2xl shadow-xl p-4 border-2 border-blue-200 z-40">
+          <div className="text-center">
+            <div className="text-3xl font-bold text-blue-600">{currentSelectedIds.size}</div>
+            <div className="text-sm text-gray-500">已選擇影片</div>
+            {hasPendingChanges && (
+              <div className="mt-2 text-xs text-orange-600 flex items-center gap-1 justify-center">
+                <AlertTriangle className="h-3 w-3" />
+                有未保存的變更
               </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 確認 Modal */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden">
+            <div className="p-6 border-b border-gray-200">
+              <h3 className="text-2xl font-bold text-gray-900">確認提交變更</h3>
             </div>
             
-            {/* Content - Scrollable */}
-            <div className="p-6 overflow-y-auto flex-1">
-              {/* 異動摘要 */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <AlertCircle className="h-5 w-5 text-amber-600" />
-                  <h4 className="font-semibold text-amber-900">異動摘要</h4>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-gray-700">{ownedVideos.length}</div>
-                    <div className="text-xs text-gray-500">目前擁有</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{selectedIds.length}</div>
-                    <div className="text-xs text-gray-500">更新後總數</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-red-600">{removedVideos.length}</div>
-                    <div className="text-xs text-gray-500">將下架</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-green-600">{addedVideos.length}</div>
-                    <div className="text-xs text-gray-500">新增</div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* 將下架的影片 */}
-              {removedVideos.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    將下架的影片 ({removedVideos.length} 部)
-                  </h4>
-                  <div className="space-y-2">
-                    {removedVideos.map((video) => (
-                      <div key={video.id} className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                          {video.thumbnail_url ? (
-                            <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <Film className="m-auto h-6 w-6 text-gray-400" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-gray-900">{video.title}</div>
-                          {video.title_en && (
-                            <div className="text-xs text-gray-500">{video.title_en}</div>
-                          )}
-                        </div>
-                        <X className="h-5 w-5 text-red-500 flex-shrink-0" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
+            <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(80vh-200px)]">
               {/* 新增的影片 */}
-              {addedVideos.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    新增的影片 ({addedVideos.length} 部)
+              {changesForDisplay.addedCount > 0 && (
+                <div>
+                  <h4 className="font-semibold text-green-700 mb-3">
+                    ✅ 新增 {changesForDisplay.addedCount} 部影片
                   </h4>
                   <div className="space-y-2">
-                    {addedVideos.map((video) => (
-                      <div key={video.id} className="flex items-center gap-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-                        <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                          {video.thumbnail_url ? (
-                            <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <Film className="m-auto h-6 w-6 text-gray-400" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-gray-900">{video.title}</div>
-                          {video.title_en && (
-                            <div className="text-xs text-gray-500">{video.title_en}</div>
-                          )}
-                        </div>
-                        <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0" />
+                    {changesForDisplay.added.map(v => (
+                      <div key={v.id} className="text-sm text-gray-700 bg-green-50 p-2 rounded">
+                        {v.title} {v.title_en ? `(${v.title_en})` : ''}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
               
-              {/* 保留的影片 */}
-              {keptVideos.length > 0 && (
-                <div className="mb-6">
-                  <h4 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
-                    保留的影片 ({keptVideos.length} 部)
+              {/* 移除的影片 */}
+              {changesForDisplay.removedCount > 0 && (
+                <div>
+                  <h4 className="font-semibold text-red-700 mb-3">
+                    ❌ 移除 {changesForDisplay.removedCount} 部影片
                   </h4>
                   <div className="space-y-2">
-                    {keptVideos.map((video) => (
-                      <div key={video.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                        <div className="w-12 h-16 bg-gray-200 rounded overflow-hidden flex-shrink-0">
-                          {video.thumbnail_url ? (
-                            <img src={video.thumbnail_url} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <Film className="m-auto h-6 w-6 text-gray-400" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm text-gray-900">{video.title}</div>
-                          {video.title_en && (
-                            <div className="text-xs text-gray-500">{video.title_en}</div>
-                          )}
-                        </div>
-                        <CheckCircle className="h-5 w-5 text-gray-500 flex-shrink-0" />
+                    {changesForDisplay.removed.map(v => (
+                      <div key={v.id} className="text-sm text-gray-700 bg-red-50 p-2 rounded">
+                        {v.title} {v.title_en ? `(${v.title_en})` : ''}
                       </div>
                     ))}
                   </div>
                 </div>
               )}
+              
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  提交後，您的影片清單將更新為 <strong className="text-blue-600">{currentSelectedIds.size} 部影片</strong>。
+                </p>
+              </div>
             </div>
             
-            {/* Footer - Fixed */}
-            <div className="p-6 pt-4 border-t border-gray-100 flex-shrink-0">
-              <div className="flex gap-3 justify-end">
-                <button
-                  onClick={() => setShowConfirmModal(false)}
-                  className="btn-ghost px-6 py-2"
-                  disabled={submitting}
-                >
-                  返回修改
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={submitting}
-                  className="btn-primary px-6 py-2 flex items-center gap-2"
-                >
-                  {submitting ? (
-                    <>
-                      <Loader className="h-4 w-4 animate-spin" />
-                      處理中...
-                    </>
-                  ) : (
-                    <>
-                      確認送出
-                      <Send className="h-4 w-4" />
-                    </>
-                  )}
-                </button>
-              </div>
+            <div className="p-6 border-t border-gray-200 flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-xl font-medium hover:bg-gray-200 transition-all"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-xl font-bold hover:shadow-lg transition-all disabled:opacity-50"
+              >
+                {submitting ? '處理中...' : '確認提交'}
+              </button>
             </div>
           </div>
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   )
