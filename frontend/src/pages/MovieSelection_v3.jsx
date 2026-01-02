@@ -126,7 +126,8 @@ export default function MovieSelection() {
         setCustomerListIds(new Set(videoIds))
         
         // 建立影片標題集合（用於跨月份判斷同一部影片）
-        const titles = new Set(items.map(item => item.title))
+        // 使用 trim() 防止標題前後有空格導致無法匹配
+        const titles = new Set(items.map(item => item.title?.trim() || item.title))
         setCustomerListTitles(titles)
         
         console.log(`✅ 已載入 ${items.length} 部影片`)
@@ -230,7 +231,7 @@ export default function MovieSelection() {
   
   function handleVideoClick(video) {
     const videoId = video.id
-    const videoTitle = video.title
+    const videoTitle = video.title?.trim() || video.title  // 防止標題有空格
     
     // 檢查影片狀態（使用標題判斷，支援跨月份）
     const isOwnedInDb = customerListTitles.has(videoTitle) || customerListIds.has(videoId)
@@ -269,7 +270,7 @@ export default function MovieSelection() {
         // 找出所有相同標題的影片 ID 並移除
         const allVideos = Object.values(allMonthsVideos).flat()
         allVideos
-          .filter(v => v.title === videoTitle)
+          .filter(v => (v.title?.trim() || v.title) === videoTitle)
           .forEach(v => newAdd.delete(v.id))
         return { ...prev, add: newAdd }
       })
@@ -295,7 +296,7 @@ export default function MovieSelection() {
   // 計算影片的顯示狀態（使用標題判斷，支援跨月份）
   function getVideoDisplayState(video) {
     const videoId = video.id
-    const videoTitle = video.title
+    const videoTitle = video.title?.trim() || video.title  // 防止標題有空格
     
     // 檢查是否在資料庫中已擁有（使用標題跨月份判斷）
     const isOwnedInDb = customerListTitles.has(videoTitle) || customerListIds.has(videoId)
@@ -329,8 +330,9 @@ export default function MovieSelection() {
     const addedVideos = allVideos.filter(v => pendingChanges.add.has(v.id))
     
     // 使用標題去重（同一影片可能出現在多個月份，但只顯示一次）
+    // 使用 trim() 防止標題前後有空格導致無法去重
     const uniqueAddedVideos = Array.from(
-      new Map(addedVideos.map(v => [v.title, v])).values()
+      new Map(addedVideos.map(v => [v.title?.trim() || v.title, v])).values()
     )
     
     const removedVideos = customerList
