@@ -24,8 +24,8 @@ export default function MovieSelection() {
   const { showToast } = useToast()
   
   // Version check - force new build hash
-  // Build: 2026-01-02T22:30:00+08:00
-  console.log('🎬 MovieSelection v1.0.1.1 - Build: 2026-01-02T22:30')
+  // Build: 2026-01-02T22:42:00+08:00
+  console.log('🎬 MovieSelection v1.0.2 - Build: 2026-01-02T22:42 - New Bundle Hash')
   
   // 當前月份影片
   const [batch, setBatch] = useState(null)
