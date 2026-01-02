@@ -26,7 +26,6 @@ import authRoutes from './routes/auth.js';
 import operationLogRoutes from './routes/operationLogs.js';
 import userRoutes from './routes/users.js';
 import systemSettingsRoutes from './routes/systemSettings.js';
-import customerListRoutes from './routes/customerList.js';
 
 // 導入服務
 import { initializeReminderScheduler } from './services/reminderService.js';
