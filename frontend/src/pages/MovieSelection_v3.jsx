@@ -352,7 +352,7 @@ export default function MovieSelection() {
     return (
       <BrandTransition show={true}>
         <div className="flex flex-col items-center justify-center min-h-[60vh]">
-          <Loader className="w-12 h-12 text-purple-600 animate-spin mb-4" />
+          <Loader className="w-12 h-12 text-primary-600 animate-spin mb-4" />
           <p className="text-gray-600">載入中...</p>
         </div>
       </BrandTransition>
@@ -365,7 +365,7 @@ export default function MovieSelection() {
       <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Film className="w-8 h-8 text-purple-600" />
+            <Film className="w-8 h-8 text-primary-600" />
             影片選擇
           </h1>
           
@@ -396,37 +396,53 @@ export default function MovieSelection() {
         </div>
       </div>
       
-      {/* 待處理變更摘要 */}
+      {/* 待處理變更摘要 - 懸浮在底部 */}
       {hasPendingChanges && (
-        <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <AlertCircle className="w-5 h-5 text-amber-600" />
-              <div>
-                <p className="font-medium text-amber-900">
-                  待處理變更
-                </p>
-                <p className="text-sm text-amber-700">
-                  新增 {pendingChanges.add.size} 部 • 移除 {pendingChanges.remove.size} 部
-                </p>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-2xl w-full mx-4">
+          <div className="bg-white/95 backdrop-blur-xl border-2 border-primary-300 rounded-2xl shadow-2xl p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg">
+                  <AlertCircle className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="font-bold text-gray-900">
+                    待處理變更
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    已選擇 <span className="font-semibold text-primary-600">{currentSelectedIds.size}</span> 部影片
+                    {pendingChanges.add.size > 0 && <span className="text-green-600"> • 新增 {pendingChanges.add.size}</span>}
+                    {pendingChanges.remove.size > 0 && <span className="text-red-600"> • 移除 {pendingChanges.remove.size}</span>}
+                  </p>
+                </div>
               </div>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <button
-                onClick={cancelChanges}
-                className="btn btn-secondary"
-              >
-                <X className="w-4 h-4" />
-                取消
-              </button>
-              <button
-                onClick={handleSubmitClick}
-                className="btn btn-primary"
-              >
-                <Send className="w-4 h-4" />
-                提交變更
-              </button>
+              
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={cancelChanges}
+                  className="btn btn-secondary"
+                >
+                  <X className="w-4 h-4" />
+                  取消
+                </button>
+                <button
+                  onClick={handleSubmitClick}
+                  disabled={submitting}
+                  className="btn btn-primary bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 shadow-lg"
+                >
+                  {submitting ? (
+                    <>
+                      <Loader className="w-4 h-4 animate-spin" />
+                      處理中
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      提交變更
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -481,7 +497,7 @@ export default function MovieSelection() {
               onClick={() => setViewMode('grid')}
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === 'grid'
-                  ? 'bg-purple-100 text-purple-600'
+                  ? 'bg-primary-100 text-primary-600'
                   : 'text-gray-400 hover:text-gray-600'
               }`}
               title="網格視圖"
@@ -492,7 +508,7 @@ export default function MovieSelection() {
               onClick={() => setViewMode('list')}
               className={`p-2 rounded-lg transition-colors ${
                 viewMode === 'list'
-                  ? 'bg-purple-100 text-purple-600'
+                  ? 'bg-primary-100 text-primary-600'
                   : 'text-gray-400 hover:text-gray-600'
               }`}
               title="清單視圖"
@@ -504,7 +520,7 @@ export default function MovieSelection() {
         
         {loadingVideos ? (
           <div className="flex items-center justify-center py-12">
-            <Loader className="w-8 h-8 text-purple-600 animate-spin" />
+            <Loader className="w-8 h-8 text-primary-600 animate-spin" />
           </div>
         ) : monthlyVideos.length === 0 ? (
           <div className="text-center py-12">
