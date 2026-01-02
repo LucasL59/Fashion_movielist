@@ -88,7 +88,7 @@ export default function MovieSelection() {
       }
     } catch (error) {
       console.error('載入月份失敗:', error)
-      showToast('error', '載入月份失敗')
+      showToast('載入月份失敗', 'error')
     } finally {
       setLoadingMonths(false)
     }
@@ -119,7 +119,7 @@ export default function MovieSelection() {
       }
     } catch (error) {
       console.error('❌ 載入客戶清單失敗:', error)
-      showToast('error', '載入清單失敗')
+      showToast('載入清單失敗', 'error')
     } finally {
       setLoadingList(false)
     }
@@ -147,7 +147,7 @@ export default function MovieSelection() {
       }
     } catch (error) {
       console.error('❌ 載入月份影片失敗:', error)
-      showToast('error', '載入影片失敗')
+      showToast('載入影片失敗', 'error')
     } finally {
       setLoadingVideos(false)
     }
@@ -252,7 +252,7 @@ export default function MovieSelection() {
   
   function handleSubmitClick() {
     if (pendingChanges.add.size === 0 && pendingChanges.remove.size === 0) {
-      showToast('warning', '沒有任何變更需要提交')
+      showToast('沒有任何變更需要提交', 'warning')
       return
     }
     
@@ -320,12 +320,12 @@ export default function MovieSelection() {
       // 6. 關閉 Modal
       setShowConfirmModal(false)
       
-      showToast('success', '影片清單已更新！')
+      showToast('影片清單已更新！', 'success')
       console.log('✅ 提交成功')
       
     } catch (error) {
       console.error('❌ 提交失敗:', error)
-      showToast('error', '提交失敗：' + error.message)
+      showToast('提交失敗：' + error.message, 'error')
     } finally {
       setSubmitting(false)
     }
@@ -340,7 +340,7 @@ export default function MovieSelection() {
       localStorage.removeItem(key)
     }
     
-    showToast('success', '已取消所有變更')
+    showToast('已取消所有變更', 'success')
   }
   
   // ==================== 計算屬性 ====================
@@ -404,8 +404,8 @@ export default function MovieSelection() {
       {/* 待處理變更摘要 - 使用 Portal 懸浮在視窗底部 */}
       {hasPendingChanges && createPortal(
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-2xl w-full px-4">
-          <div className="bg-white/95 backdrop-blur-xl border-2 border-primary-300 rounded-2xl shadow-2xl p-4">
-            <div className="flex items-center justify-between">
+          <div className="relative bg-gradient-to-br from-white/80 via-white/70 to-white/60 backdrop-blur-xl border border-white/50 shadow-xl shadow-primary-500/20 rounded-2xl p-4" style={{ backdropFilter: 'blur(20px) saturate(180%)' }}>
+            <div className="relative z-10 flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="flex-shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-lg">
                   <AlertCircle className="w-6 h-6 text-white" />
