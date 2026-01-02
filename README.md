@@ -41,7 +41,7 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 
 > 完整說明請見相關技術文檔
 
-### v3.0.4 資料庫性能優化 ⚡
+### v3.0.4 資料庫性能優化 & 資料品質修正 ⚡
 
 - **🚀 RLS 性能大幅提升**：
   - 修復所有 29 個 "Auth RLS Initialization Plan" 警告
@@ -58,6 +58,13 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
   - 為 `mail_rules.created_by` 添加索引
   - 為 `system_settings.updated_by` 添加索引
   - JOIN 查詢速度提升 10-50%
+  
+- **🧹 資料品質修正**：
+  - 使用 MCP 連接 Supabase 發現並修正資料品質問題
+  - 清理所有影片標題的前後空格（例如：「小吃店 」→「小吃店」）
+  - 執行 SQL: `UPDATE videos SET title = TRIM(title), title_en = TRIM(title_en)`
+  - 在前端所有標題比較處加入 `trim()` 防護
+  - 防止將來從 Excel 上傳時帶入空格導致跨月份選擇無法識別
   
 - **📝 完整文檔**：
   - 詳見 [RLS_PERFORMANCE_FIX_SUMMARY.md](RLS_PERFORMANCE_FIX_SUMMARY.md) 
@@ -417,13 +424,14 @@ npm run build
 | 第一次接觸 | [START_HERE.md](START_HERE.md)、[QUICK_START.md](QUICK_START.md)、[QUICK_REFERENCE.md](QUICK_REFERENCE.md) |
 | 了解 v3.0 更新 | [REFACTOR_V3_DEPLOYMENT_GUIDE.md](REFACTOR_V3_DEPLOYMENT_GUIDE.md)、[CRITICAL_BUG_FIX.md](CRITICAL_BUG_FIX.md)、[UI_UX_OPTIMIZATION_SUMMARY.md](UI_UX_OPTIMIZATION_SUMMARY.md) |
 | v3.0 技術修正 | [PORTAL_FIX_SUMMARY.md](PORTAL_FIX_SUMMARY.md)、[GLASSMORPHISM_TOAST_FIX.md](GLASSMORPHISM_TOAST_FIX.md)、[UI_FIX_SUMMARY.md](UI_FIX_SUMMARY.md) |
+| v3.0.4 性能優化 ⭐ | [RLS_PERFORMANCE_FIX_SUMMARY.md](RLS_PERFORMANCE_FIX_SUMMARY.md)、[VERIFICATION_REPORT_RLS_FIX.md](VERIFICATION_REPORT_RLS_FIX.md) |
 | 了解 v2.0 更新 | [UPDATE_SUMMARY.md](UPDATE_SUMMARY.md)、[ANSWERS_TO_YOUR_QUESTIONS.md](ANSWERS_TO_YOUR_QUESTIONS.md)、[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) |
 | v2.1 功能與 UI 改版 | [NEW_FEATURES_SUMMARY.md](NEW_FEATURES_SUMMARY.md)、[UI_IMPROVEMENTS_SUMMARY.md](UI_IMPROVEMENTS_SUMMARY.md)、[DESIGN_REFINEMENT_SUMMARY.md](DESIGN_REFINEMENT_SUMMARY.md) |
 | 2025-11 優化與調整 | [UPDATE_SUMMARY_2025_11_24.md](UPDATE_SUMMARY_2025_11_24.md)、[OPTIMIZATION_LOG_2025_11.md](OPTIMIZATION_LOG_2025_11.md) |
 | 部署與維運 | [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md)、[DEPLOYMENT.md](DEPLOYMENT.md)、[ENV_SETUP_GUIDE.md](ENV_SETUP_GUIDE.md) |
 | 權限與測試 | [PERMISSION_SYSTEM_UPDATE.md](PERMISSION_SYSTEM_UPDATE.md)、[TESTING_NEW_FEATURES.md](TESTING_NEW_FEATURES.md) |
 | 部署與設定 | [DEPLOYMENT.md](DEPLOYMENT.md)、[ENV_SETUP_GUIDE.md](ENV_SETUP_GUIDE.md)、[AZURE_AD_SETUP_FIX.md](AZURE_AD_SETUP_FIX.md) |
-| 資料庫 | [database/README.md](database/README.md)、[database/schema.sql](database/schema.sql) |
+| 資料庫 | [database/README.md](database/README.md)、[database/schema.sql](database/schema.sql)、[migration_fix_rls_performance.sql](database/migration_fix_rls_performance.sql) ⭐ |
 
 更多分類（依角色/目的）請見文件索引。
 
@@ -510,6 +518,7 @@ values (
   - ✅ 三層權限、用戶管理、操作紀錄、提醒設定
   - ✅ 影片選擇系統 v3 重構（跨月份選擇、待處理變更追蹤）
   - ✅ **跨月份選擇同步修正**（使用標題識別，真正實現跨月份同步） ⭐ v3.0.3
+  - ✅ **資料品質修正**（清理空格、加入 trim() 防護，100% 準確識別） ⭐ v3.0.4
   - ✅ UI/UX 全面優化（毛玻璃效果、主題色統一、視圖切換）
   - ✅ 關鍵 Bug 修正（API 格式、事件處理、Toast 訊息）
   - ✅ 郵件通知開關管理（可控制自動郵件功能）
