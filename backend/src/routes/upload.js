@@ -93,6 +93,39 @@ router.post('/', requireAuth, requireRoles(['admin', 'uploader']), async (req, r
     console.log(`📝 批次名稱: ${batchName}`);
     console.log(`📅 識別月份: ${extractedMonth}`);
     
+    // 檢查該月份是否已有 active 批次
+    const { data: existingBatch, error: checkError } = await supabase
+      .from('batches')
+      .select('id, name, status')
+      .eq('month', extractedMonth)
+      .eq('status', 'active')
+      .maybeSingle();
+    
+    if (checkError && checkError.code !== 'PGRST116') {
+      throw checkError;
+    }
+    
+    if (existingBatch) {
+      console.log(`📦 發現同月份的 active 批次: ${existingBatch.name}`);
+      console.log(`🔄 將舊批次標記為 archived`);
+      
+      // 將舊批次標記為 archived
+      const { error: archiveError } = await supabase
+        .from('batches')
+        .update({ 
+          status: 'archived',
+          is_latest: false 
+        })
+        .eq('id', existingBatch.id);
+      
+      if (archiveError) {
+        console.error('❌ 封存舊批次失敗:', archiveError);
+        throw archiveError;
+      }
+      
+      console.log(`✅ 已將舊批次 ${existingBatch.name} 標記為封存`);
+    }
+    
     // 解析 Excel 並上傳到 Supabase
     const result = await parseExcelAndUpload(file, uploaderId, batchName, extractedMonth);
     

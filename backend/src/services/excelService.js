@@ -37,7 +37,8 @@ export async function parseExcelAndUpload(file, uploaderId, batchName, month) {
         name: batchName,
         month: month,
         uploader_id: uploaderId,
-        status: 'active'
+        status: 'active',
+        is_latest: true
       })
       .select()
       .single();

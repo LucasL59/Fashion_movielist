@@ -25,6 +25,7 @@ import authRoutes from './routes/auth.js';
 import operationLogRoutes from './routes/operationLogs.js';
 import userRoutes from './routes/users.js';
 import systemSettingsRoutes from './routes/systemSettings.js';
+import customerListRoutes from './routes/customerList.js';
 
 // 導入服務
 import { initializeReminderScheduler } from './services/reminderService.js';
@@ -117,6 +118,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/operation-logs', operationLogRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/system-settings', systemSettingsRoutes);
+app.use('/api/customer-list', customerListRoutes);
 
 // ==================== 錯誤處理 ====================
 

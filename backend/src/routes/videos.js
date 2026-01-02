@@ -100,54 +100,57 @@ router.get('/batches', async (req, res) => {
 /**
  * GET /api/videos/by-month/:month
  * 
- * 獲取指定月份的影片清單
+ * 獲取指定月份的影片清單（重構後：只返回該月 active 批次）
  */
-router.get('/by-month/:month', async (req, res) => {
+router.get('/by-month/:month', requireAuth, async (req, res) => {
   try {
-    const { month } = req.params;
+    const { month } = req.params;  // YYYY-MM 格式
     
-    // 獲取該月份的批次
-    const { data: batches, error: batchError } = await supabase
+    console.log(`🔍 [videos/by-month] 查詢月份: ${month}`);
+    
+    // 查找該月份的 active 批次（由於唯一約束，只會有一個）
+    const { data: batch, error: batchError } = await supabase
       .from('batches')
-      .select('*')
+      .select('id, name, month, created_at, is_latest')
       .eq('month', month)
       .eq('status', 'active')
-      .order('created_at', { ascending: false });
+      .single();
     
-    if (batchError) throw batchError;
-    
-    if (!batches || batches.length === 0) {
-      return res.json({
-        success: true,
-        data: {
-          batch: null,
-          videos: []
-        }
-      });
+    if (batchError) {
+      if (batchError.code === 'PGRST116') {
+        console.log(`ℹ️  [videos/by-month] 該月份沒有 active 批次`);
+        return res.json({
+          success: true,
+          data: {
+            batch: null,
+            videos: []
+          }
+        });
+      }
+      throw batchError;
     }
-    
-    // 使用最新的批次
-    const latestBatch = batches[0];
     
     // 獲取該批次的影片
     const { data: videos, error: videosError } = await supabase
       .from('videos')
       .select('*')
-      .eq('batch_id', latestBatch.id)
-      .order('created_at', { ascending: true });
+      .eq('batch_id', batch.id)
+      .order('row_number', { ascending: true });
     
     if (videosError) throw videosError;
+    
+    console.log(`✅ [videos/by-month] 找到批次 ${batch.name}，包含 ${videos?.length || 0} 部影片`);
     
     res.json({
       success: true,
       data: {
-        batch: latestBatch,
+        batch: batch,
         videos: videos || []
       }
     });
     
   } catch (error) {
-    console.error('獲取影片清單失敗:', error);
+    console.error('❌ [videos/by-month] 獲取影片清單失敗:', error);
     res.status(500).json({
       error: 'Internal Server Error',
       message: error.message || '獲取影片清單失敗'
@@ -158,20 +161,31 @@ router.get('/by-month/:month', async (req, res) => {
 /**
  * GET /api/videos/months
  * 
- * 獲取所有可用的月份列表
+ * 獲取所有可用的月份列表（重構後：返回詳細資訊）
  */
-router.get('/months', async (req, res) => {
+router.get('/months', requireAuth, async (req, res) => {
   try {
+    console.log(`🔍 [videos/months] 查詢可用月份`);
+    
     const { data: batches, error } = await supabase
       .from('batches')
-      .select('month, created_at')
+      .select('month, name, created_at, is_latest')
       .eq('status', 'active')
       .order('month', { ascending: false });
     
     if (error) throw error;
     
-    // 去重並排序
-    const months = [...new Set(batches.map(b => b.month))].filter(Boolean);
+    // 由於每月只有一個 active 批次，不需要去重
+    const months = batches
+      .map(b => ({
+        month: b.month,
+        batchName: b.name,
+        createdAt: b.created_at,
+        isLatest: b.is_latest
+      }))
+      .filter(m => m.month);  // 過濾掉沒有 month 的批次
+    
+    console.log(`✅ [videos/months] 找到 ${months.length} 個可用月份`);
     
     res.json({
       success: true,
@@ -179,7 +193,7 @@ router.get('/months', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('獲取月份列表失敗:', error);
+    console.error('❌ [videos/months] 獲取月份列表失敗:', error);
     res.status(500).json({
       error: 'Internal Server Error',
       message: error.message || '獲取月份列表失敗'
