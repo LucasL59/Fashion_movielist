@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Mail, ShieldCheck, Info, AlertTriangle, Clock, Calendar, X, Send, User, Loader } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { createMailRule, deleteMailRule, getMailRules, getReminderSettings, setReminderSchedule, getBatches, getMailNotificationSettings, setMailNotificationSettings } from '../lib/api'
+import { createMailRule, deleteMailRule, getMailRules, getReminderSettings, setReminderSchedule, getBatches, getMailNotificationSettings, setMailNotificationSettings, resendSelectionNotification, resendBatchUploadNotification } from '../lib/api'
 import Select from '../components/Select'
 import Modal from '../components/Modal'
 import { useToast } from '../contexts/ToastContext'
@@ -82,6 +82,14 @@ export default function MailManagement() {
   const [selectedBatch, setSelectedBatch] = useState('')
   const [loadingUsers, setLoadingUsers] = useState(false)
   const [sendingTo, setSendingTo] = useState(null) // 正在發送給哪個使用者
+  
+  // 客戶選擇補發相關狀態
+  const [selectedCustomer, setSelectedCustomer] = useState('')
+  const [resendingSelection, setResendingSelection] = useState(false)
+  
+  // 批次上傳補發相關狀態
+  const [selectedBatchForResend, setSelectedBatchForResend] = useState('')
+  const [resendingBatch, setResendingBatch] = useState(false)
 
   const uploaderEmails = useMemo(() => {
     return availableUsers
@@ -173,6 +181,65 @@ export default function MailManagement() {
       showToast('更新失敗，請稍後再試', 'error')
     } finally {
       setMailTogglesSyncing(false)
+    }
+  }
+  
+  // 補發客戶選擇通知
+  async function handleResendSelectionNotification() {
+    if (!selectedCustomer) {
+      showToast('請先選擇客戶', 'warning')
+      return
+    }
+    
+    const customer = allUsers.find(u => u.id === selectedCustomer)
+    if (!customer) {
+      showToast('找不到指定的客戶', 'error')
+      return
+    }
+    
+    try {
+      setResendingSelection(true)
+      await resendSelectionNotification(selectedCustomer)
+      showToast(`已成功補發 ${customer.name} 的選擇通知`, 'success')
+      setSelectedCustomer('') // 清空選擇
+    } catch (error) {
+      console.error('補發客戶選擇通知失敗:', error)
+      const errorMsg = error.response?.data?.message || '補發通知失敗'
+      showToast(errorMsg, 'error')
+    } finally {
+      setResendingSelection(false)
+    }
+  }
+  
+  // 補發批次上傳通知
+  async function handleResendBatchUploadNotification() {
+    if (!selectedBatchForResend) {
+      showToast('請先選擇批次', 'warning')
+      return
+    }
+    
+    const batch = batches.find(b => b.id === selectedBatchForResend)
+    if (!batch) {
+      showToast('找不到指定的批次', 'error')
+      return
+    }
+    
+    try {
+      setResendingBatch(true)
+      const response = await resendBatchUploadNotification(selectedBatchForResend)
+      const stats = response.data?.notificationStats
+      if (stats) {
+        showToast(`已補發通知：${stats.customersSent} 位客戶、${stats.internalSent} 位內部人員`, 'success')
+      } else {
+        showToast(`已成功補發批次「${batch.name}」的上傳通知`, 'success')
+      }
+      setSelectedBatchForResend('') // 清空選擇
+    } catch (error) {
+      console.error('補發批次上傳通知失敗:', error)
+      const errorMsg = error.response?.data?.message || '補發通知失敗'
+      showToast(errorMsg, 'error')
+    } finally {
+      setResendingBatch(false)
     }
   }
 
@@ -506,17 +573,49 @@ export default function MailManagement() {
         </p>
       </div>
 
-      {/* 郵件通知全局開關 */}
-      <section className="card bg-gradient-to-br from-primary-50 to-amber-50 border-primary-100 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-primary-100 pb-4">
+      {/* 客戶提交影片選擇通知 */}
+      <section className="card bg-white border-primary-100 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary-100 text-primary-600 rounded-lg">
+            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
               <Mail className="h-6 w-6" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">郵件通知開關</h2>
-              <p className="text-sm text-gray-500">控制自動郵件通知功能的啟用或停用</p>
+              <h2 className="text-lg font-semibold text-gray-900">客戶提交影片選擇通知</h2>
+              <p className="text-sm text-gray-500">客戶提交選擇時自動通知管理員與上傳者</p>
+              {!mailToggles.selection_submitted?.enabled && (
+                <p className="text-xs text-gray-400 mt-1">啟用後所有變更會立即套用，無需手動儲存</p>
+              )}
             </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleToggleMailNotification('selection_submitted')}
+              disabled={mailTogglesSyncing}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                mailToggles.selection_submitted?.enabled ? 'bg-primary-600' : 'bg-gray-200'
+              } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span className="sr-only">啟用客戶提交通知</span>
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  mailToggles.selection_submitted?.enabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+            <span className={`text-sm font-medium ${mailToggles.selection_submitted?.enabled ? 'text-primary-700' : 'text-gray-500'}`}>
+              {mailToggles.selection_submitted?.enabled ? '已啟用' : '已停用'}
+            </span>
+            {mailTogglesSyncing ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="spinner w-4 h-4 border-gray-300"></span>
+                <span>同步中...</span>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400">變更會自動儲存</span>
+            )}
           </div>
         </div>
 
@@ -524,84 +623,168 @@ export default function MailManagement() {
           <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
             <div className="spinner"></div> 載入設定中...
           </div>
+        ) : mailToggles.selection_submitted?.enabled ? (
+          <div className="space-y-4 transition-all duration-300">
+            <p className="text-sm text-gray-600">
+              當客戶提交或更新影片選擇時，系統會自動發送通知郵件給所有管理員、該批次的上傳者，以及額外設定的收件人。
+            </p>
+            
+            {/* 補發客戶選擇通知 */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-3">補發客戶選擇通知</p>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                <p className="text-sm text-gray-700 mb-3">選擇特定客戶，重新發送其最後一次的影片選擇通知給管理員與上傳者。</p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <Select
+                      value={selectedCustomer}
+                      onChange={(e) => setSelectedCustomer(e.target.value)}
+                      options={[
+                        { value: '', label: '請選擇客戶' },
+                        ...allUsers
+                          .filter(u => u.role === 'customer')
+                          .map((customer) => ({
+                            value: customer.id,
+                            label: `${customer.name} (${customer.email})`
+                          }))
+                      ]}
+                    />
+                  </div>
+                  <button
+                    onClick={handleResendSelectionNotification}
+                    disabled={!selectedCustomer || resendingSelection}
+                    className="btn btn-secondary whitespace-nowrap flex items-center justify-center gap-2"
+                  >
+                    {resendingSelection ? (
+                      <>
+                        <Loader className="h-4 w-4 animate-spin" />
+                        <span>發送中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        <span>補發通知</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  💡 將補發該客戶最後一次提交的選擇記錄通知
+                </p>
+              </div>
+            </div>
+          </div>
         ) : (
-          <div className="space-y-4">
-            {/* 客戶提交影片選擇開關 */}
-            <div className="bg-white/70 backdrop-blur-sm rounded-xl px-4 py-4 border border-primary-100">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="text-base font-semibold text-gray-900 mb-1">客戶提交影片選擇通知</h3>
-                  <p className="text-sm text-gray-600">
-                    當客戶提交影片選擇時，自動發送通知給管理員和上傳者
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 ml-4">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleMailNotification('selection_submitted')}
-                    disabled={mailTogglesSyncing}
-                    className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-                      mailToggles.selection_submitted?.enabled ? 'bg-primary-600' : 'bg-gray-200'
-                    } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <span className="sr-only">啟用客戶提交通知</span>
-                    <span
-                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        mailToggles.selection_submitted?.enabled ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                  <span className={`text-sm font-medium whitespace-nowrap ${
-                    mailToggles.selection_submitted?.enabled ? 'text-primary-700' : 'text-gray-500'
-                  }`}>
-                    {mailToggles.selection_submitted?.enabled ? '已啟用' : '已停用'}
-                  </span>
-                </div>
-              </div>
-            </div>
+          <div className="py-10 text-center text-gray-500">
+            <p>客戶提交影片選擇通知目前為停用狀態。</p>
+            <p className="text-sm mt-1">啟用後當客戶提交選擇時會自動發送通知。</p>
+          </div>
+        )}
+      </section>
 
-            {/* 新影片清單上傳開關 */}
-            <div className="bg-white/70 backdrop-blur-sm rounded-xl px-4 py-4 border border-primary-100">
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
-                  <h3 className="text-base font-semibold text-gray-900 mb-1">新影片清單上傳通知</h3>
-                  <p className="text-sm text-gray-600">
-                    當新的影片清單上傳時，自動發送通知給所有客戶和相關人員
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 ml-4">
-                  <button
-                    type="button"
-                    onClick={() => handleToggleMailNotification('batch_uploaded')}
-                    disabled={mailTogglesSyncing}
-                    className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
-                      mailToggles.batch_uploaded?.enabled ? 'bg-primary-600' : 'bg-gray-200'
-                    } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <span className="sr-only">啟用上傳通知</span>
-                    <span
-                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                        mailToggles.batch_uploaded?.enabled ? 'translate-x-5' : 'translate-x-0'
-                      }`}
-                    />
-                  </button>
-                  <span className={`text-sm font-medium whitespace-nowrap ${
-                    mailToggles.batch_uploaded?.enabled ? 'text-primary-700' : 'text-gray-500'
-                  }`}>
-                    {mailToggles.batch_uploaded?.enabled ? '已啟用' : '已停用'}
-                  </span>
-                </div>
-              </div>
+      {/* 新影片清單上傳通知 */}
+      <section className="card bg-white border-primary-100 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
+              <Send className="h-6 w-6" />
             </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">新影片清單上傳通知</h2>
+              <p className="text-sm text-gray-500">上傳新清單時自動通知所有客戶與相關人員</p>
+              {!mailToggles.batch_uploaded?.enabled && (
+                <p className="text-xs text-gray-400 mt-1">啟用後所有變更會立即套用，無需手動儲存</p>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleToggleMailNotification('batch_uploaded')}
+              disabled={mailTogglesSyncing}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                mailToggles.batch_uploaded?.enabled ? 'bg-primary-600' : 'bg-gray-200'
+              } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <span className="sr-only">啟用上傳通知</span>
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  mailToggles.batch_uploaded?.enabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+            <span className={`text-sm font-medium ${mailToggles.batch_uploaded?.enabled ? 'text-primary-700' : 'text-gray-500'}`}>
+              {mailToggles.batch_uploaded?.enabled ? '已啟用' : '已停用'}
+            </span>
+            {mailTogglesSyncing ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500">
+                <span className="spinner w-4 h-4 border-gray-300"></span>
+                <span>同步中...</span>
+              </div>
+            ) : (
+              <span className="text-xs text-gray-400">變更會自動儲存</span>
+            )}
+          </div>
+        </div>
 
-            {/* 提示訊息 */}
-            <div className="flex items-start gap-2 text-xs text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
-              <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="font-medium text-blue-900 mb-1">💡 功能說明</p>
-                <p>停用後，系統將不會發送對應的自動郵件通知。您仍可透過「補發通知」功能手動發送郵件。</p>
+        {mailTogglesLoading ? (
+          <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
+            <div className="spinner"></div> 載入設定中...
+          </div>
+        ) : mailToggles.batch_uploaded?.enabled ? (
+          <div className="space-y-4 transition-all duration-300">
+            <p className="text-sm text-gray-600">
+              當管理員或上傳者上傳新的影片清單時，系統會自動發送通知郵件給所有客戶，以及內部相關人員（管理員、上傳者，排除本次上傳者本人）。
+            </p>
+            
+            {/* 補發上傳通知（批量） */}
+            <div className="border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700 mb-3">補發上傳通知（批量）</p>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                <p className="text-sm text-gray-700 mb-3">選擇批次，重新發送上傳通知給所有客戶與相關人員。</p>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="flex-1">
+                    <Select
+                      value={selectedBatchForResend}
+                      onChange={(e) => setSelectedBatchForResend(e.target.value)}
+                      options={[
+                        { value: '', label: '請選擇批次' },
+                        ...batches.map((batch) => ({
+                          value: batch.id,
+                          label: `${batch.name} (${new Date(batch.created_at).toLocaleDateString('zh-TW')})`
+                        }))
+                      ]}
+                    />
+                  </div>
+                  <button
+                    onClick={handleResendBatchUploadNotification}
+                    disabled={!selectedBatchForResend || resendingBatch}
+                    className="btn btn-secondary whitespace-nowrap flex items-center justify-center gap-2"
+                  >
+                    {resendingBatch ? (
+                      <>
+                        <Loader className="h-4 w-4 animate-spin" />
+                        <span>發送中...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-4 w-4" />
+                        <span>補發通知</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  💡 將通知所有客戶與內部人員（管理員、上傳者）
+                </p>
               </div>
             </div>
+          </div>
+        ) : (
+          <div className="py-10 text-center text-gray-500">
+            <p>新影片清單上傳通知目前為停用狀態。</p>
+            <p className="text-sm mt-1">啟用後當上傳新清單時會自動發送通知。</p>
           </div>
         )}
       </section>
@@ -795,14 +978,14 @@ export default function MailManagement() {
         )}
       </section>
 
-      {/* 補發通知卡片 */}
+      {/* 個別使用者補發通知卡片 */}
       <section className="card bg-white border-blue-100 shadow-sm">
         <div className="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
           <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
             <Send className="h-6 w-6" />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">補發上傳通知</h2>
+            <h2 className="text-lg font-semibold text-gray-900">個別使用者補發通知</h2>
             <p className="text-sm text-gray-500">針對個別使用者補發「新的影片清單已上傳」通知</p>
           </div>
         </div>

@@ -371,6 +371,22 @@ export async function setMailNotificationSettings(data) {
   return response.data
 }
 
+/**
+ * 補發客戶選擇通知
+ */
+export async function resendSelectionNotification(customerId) {
+  const response = await api.post('/api/mail-rules/notifications/selection-submitted', { customerId })
+  return response.data
+}
+
+/**
+ * 補發批次上傳通知（批量）
+ */
+export async function resendBatchUploadNotification(batchId) {
+  const response = await api.post('/api/mail-rules/notifications/upload', { batchId })
+  return response.data
+}
+
 export async function registerAccount(data) {
   const response = await api.post('/api/auth/register', data)
   return response.data

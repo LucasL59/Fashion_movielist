@@ -194,6 +194,159 @@ router.post('/notifications/upload', requireAuth, requireRoles(['admin', 'upload
   }
 });
 
+/**
+ * POST /api/mail-rules/notifications/selection-submitted
+ * 補發客戶選擇通知（僅限 admin）
+ */
+router.post('/notifications/selection-submitted', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { customerId } = req.body;
+    
+    if (!customerId) {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: '缺少客戶 ID'
+      });
+    }
+    
+    // 獲取客戶資訊
+    const { data: customer, error: customerError } = await supabase
+      .from('profiles')
+      .select('id, name, email, role')
+      .eq('id', customerId)
+      .eq('role', 'customer')
+      .single();
+    
+    if (customerError || !customer) {
+      return res.status(404).json({
+        error: 'NotFound',
+        message: '找不到指定的客戶'
+      });
+    }
+    
+    // 獲取該客戶最後一次的選擇記錄
+    const { data: latestSelection, error: selectionError } = await supabase
+      .from('selections')
+      .select('id, batch_id, video_ids, created_at')
+      .eq('user_id', customerId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (selectionError) throw selectionError;
+    
+    if (!latestSelection || !latestSelection.video_ids || latestSelection.video_ids.length === 0) {
+      return res.status(404).json({
+        error: 'NotFound',
+        message: '該客戶尚未提交任何選擇記錄'
+      });
+    }
+    
+    // 獲取選擇的影片詳細資訊
+    const { data: selectedVideos, error: videosError } = await supabase
+      .from('videos')
+      .select('*')
+      .in('id', latestSelection.video_ids);
+    
+    if (videosError) throw videosError;
+    
+    // 獲取當前批次資訊以計算上月差異（與原邏輯保持一致）
+    const { data: currentBatch, error: batchError } = await supabase
+      .from('batches')
+      .select('month')
+      .eq('id', latestSelection.batch_id)
+      .single();
+    
+    let previousVideos = [];
+    let previousVideoIds = [];
+    
+    if (currentBatch && currentBatch.month) {
+      // 計算上一個月份
+      const [year, month] = currentBatch.month.split('-').map(Number);
+      const prevDate = new Date(year, month - 2, 1);
+      const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}`;
+      
+      // 查找上月批次
+      const { data: previousBatches } = await supabase
+        .from('batches')
+        .select('id')
+        .eq('month', prevMonth)
+        .eq('status', 'active')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (previousBatches && previousBatches.length > 0) {
+        // 查找用戶上月選擇
+        const { data: previousSelection } = await supabase
+          .from('selections')
+          .select('video_ids')
+          .eq('user_id', customerId)
+          .eq('batch_id', previousBatches[0].id)
+          .maybeSingle();
+        
+        if (previousSelection && previousSelection.video_ids) {
+          previousVideoIds = previousSelection.video_ids;
+          
+          // 獲取上月影片詳情
+          const { data: prevVids } = await supabase
+            .from('videos')
+            .select('*')
+            .in('id', previousVideoIds);
+          
+          previousVideos = prevVids || [];
+        }
+      }
+    }
+    
+    // 發送通知給管理員（使用 emailService 中現有的函數）
+    const { notifyAdminCustomerSelection } = await import('../services/emailService.js');
+    
+    await notifyAdminCustomerSelection({
+      customerName: customer.name || customer.email,
+      customerEmail: customer.email,
+      batchId: latestSelection.batch_id,
+      videos: selectedVideos || [],
+      previousVideos: previousVideos,
+      previousVideoIds: previousVideoIds
+    });
+    
+    // 記錄操作
+    await recordOperationLog({
+      req,
+      action: 'mail.selection_submitted.resend',
+      resourceType: 'selection',
+      resourceId: latestSelection.id,
+      description: `${req.authUserProfile?.name || '未知用戶'} 補發客戶「${customer.name}」的影片選擇通知`,
+      metadata: {
+        customerId: customer.id,
+        customerName: customer.name,
+        customerEmail: customer.email,
+        selectionId: latestSelection.id,
+        batchId: latestSelection.batch_id,
+        videoCount: selectedVideos?.length || 0
+      }
+    });
+    
+    res.json({
+      success: true,
+      message: '選擇通知已成功發送',
+      data: {
+        customerId: customer.id,
+        customerName: customer.name,
+        selectionId: latestSelection.id,
+        videoCount: selectedVideos?.length || 0
+      }
+    });
+    
+  } catch (error) {
+    console.error('補發客戶選擇通知失敗:', error);
+    res.status(500).json({
+      error: 'NotificationError',
+      message: error.message || '無法發送通知'
+    });
+  }
+});
+
 const EVENT_TYPES = ['selection_submitted', 'batch_uploaded']
 
 function isValidEmail(email) {
