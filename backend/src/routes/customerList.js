@@ -277,14 +277,20 @@ router.post('/:customerId/submit', requireAuth, async (req, res) => {
       const customerName = authProfile?.name || authUser?.email || '客戶';
       const customerEmail = authProfile?.email || authUser?.email;
       
-      await notifyAdminCustomerSelection(
+      // 準備郵件通知資料
+      // addedVideos 和 removedVideos 已經是前端處理好的完整影片資料（已去重）
+      const emailData = {
         customerId,
         customerName,
         customerEmail,
-        videoIds.length,
-        addedVideos,
-        removedVideos
-      );
+        totalCount: videoIds.length,
+        addedVideos,  // 前端已使用標題去重
+        removedVideos // 前端已處理
+      };
+      
+      console.log(`📧 [customer-list] 準備發送通知: 新增 ${addedVideos.length} 部, 移除 ${removedVideos.length} 部`);
+      
+      await notifyAdminCustomerSelection(emailData);
       
       console.log('📧 [customer-list] 已發送通知');
     } catch (emailError) {

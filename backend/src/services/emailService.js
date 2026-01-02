@@ -428,14 +428,14 @@ export async function notifyCustomersNewList(batchId, batchName = null) {
  * 通知管理員客戶的選擇
  * 
  * @param {Object} options - 選項
+ * @param {string} options.customerId - 客戶 ID
  * @param {string} options.customerName - 客戶名稱
  * @param {string} options.customerEmail - 客戶 Email
- * @param {string} options.batchId - 批次 ID
- * @param {Array} options.videos - 選擇的影片陣列
- * @param {Array} options.previousVideos - 上月選擇的影片陣列（選填）
- * @param {Array} options.previousVideoIds - 上月選擇的影片 ID 陣列（選填）
+ * @param {number} options.totalCount - 當前清單總數
+ * @param {Array} options.addedVideos - 新增的影片陣列（前端已去重）
+ * @param {Array} options.removedVideos - 移除的影片陣列
  */
-export async function notifyAdminCustomerSelection({ customerName, customerEmail, batchId, videos, previousVideos = [], previousVideoIds = [] }) {
+export async function notifyAdminCustomerSelection({ customerId, customerName, customerEmail, totalCount, addedVideos = [], removedVideos = [] }) {
   try {
     // 檢查郵件通知是否啟用
     const isEnabled = await isMailNotificationEnabled(MAIL_EVENT_TYPES.SELECTION_SUBMITTED);
@@ -443,18 +443,9 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       console.log('📧 客戶提交影片選擇通知已停用，跳過發送');
       return { disabled: true };
     }
-    // 查詢批次資訊
-    const { data: batch } = await supabase
-      .from('batches')
-      .select('id, name, uploader_id')
-      .eq('id', batchId)
-      .maybeSingle();
 
-    const uploaderProfile = await getUploaderByBatch(batch);
-    console.log('📤 [notifyAdminCustomerSelection] 上傳者資料:', uploaderProfile);
-
-    const uploaderIdToExclude = uploaderProfile?.id ? [uploaderProfile.id] : []
-    const adminRecipients = await getAdminRecipients(uploaderIdToExclude)
+    // 獲取收件人列表（管理員 + 郵件規則收件人）
+    const adminRecipients = await getAdminRecipients([])
     console.log('👥 [notifyAdminCustomerSelection] 管理員收件人:', adminRecipients);
     
     const mailRuleRecipients = await getMailRecipientsByEvent(MAIL_EVENT_TYPES.SELECTION_SUBMITTED);
@@ -462,7 +453,7 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
     
     const recipients = mergeRecipients(
       adminRecipients,
-      uploaderProfile?.email,
+      null, // 不需要 uploader email
       mailRuleRecipients
     );
     
@@ -473,74 +464,79 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
       return;
     }
     
-    // 計算差異
-    const currentVideoIds = videos.map(v => v.id);
-    const removedVideos = previousVideos.filter(v => !currentVideoIds.includes(v.id));
-    const addedVideos = videos.filter(v => !previousVideoIds.includes(v.id));
-    const keptVideos = videos.filter(v => previousVideoIds.includes(v.id));
+    // 前端已處理好新增和移除的影片清單（使用標題去重）
+    console.log(`📊 [notifyAdminCustomerSelection] 清單統計: 總數 ${totalCount}, 新增 ${addedVideos.length}, 移除 ${removedVideos.length}`);
     
-    // 建立本月選擇清單 HTML
-    const videoListHtml = videos.map((video, index) => {
-      const isNew = !previousVideoIds.includes(video.id);
-      const badge = isNew ? '<span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">新增</span>' : '';
-      
-      return `
-      <tr style="border-bottom: 1px solid #eee;">
-        <td style="padding: 16px 12px; color: #999; font-size: 14px;">${String(index + 1).padStart(2, '0')}</td>
-        <td style="padding: 16px 12px;">
-          <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">${video.title}${badge}</div>
-          <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
-        </td>
-        <td style="padding: 16px 12px; color: #666; font-size: 14px; white-space: nowrap;">
-          ${video.duration ? `${video.duration} 分鐘` : '-'}
-        </td>
-        <td style="padding: 16px 12px; white-space: nowrap;">
-          <span style="background: #f5f5f5; color: #666; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500;">
-            ${video.rating || '普遍級'}
-          </span>
-        </td>
-      </tr>
-    `;
-    }).join('');
-    
-    // 建立上月選擇清單 HTML（若有）
-    let previousSectionHtml = '';
-    if (previousVideos.length > 0) {
-      const previousListHtml = previousVideos.map((video, index) => {
-        const isRemoved = !currentVideoIds.includes(video.id);
-        const statusBadge = isRemoved 
-          ? '<span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">已下架</span>'
-          : '<span style="background: #6b7280; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">保留</span>';
-        
+    // 建立新增影片清單 HTML
+    let addedSectionHtml = '';
+    if (addedVideos.length > 0) {
+      const addedListHtml = addedVideos.map((video, index) => {
         return `
-        <tr style="border-bottom: 1px solid #eee; ${isRemoved ? 'opacity: 0.6;' : ''}">
-          <td style="padding: 12px; color: #999; font-size: 13px;">${String(index + 1).padStart(2, '0')}</td>
-          <td style="padding: 12px;">
-            <div style="font-weight: 600; font-size: 14px; color: #333; margin-bottom: 2px;">${video.title}${statusBadge}</div>
-            <div style="font-size: 12px; color: #888;">${video.title_en || ''}</div>
-          </td>
-          <td style="padding: 12px; color: #666; font-size: 13px; white-space: nowrap;">
-            ${video.duration ? `${video.duration} 分鐘` : '-'}
+        <tr style="border-bottom: 1px solid #eee;">
+          <td style="padding: 16px 12px; color: #999; font-size: 14px;">${String(index + 1).padStart(2, '0')}</td>
+          <td style="padding: 16px 12px;">
+            <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">
+              ${video.title}
+              <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">新增</span>
+            </div>
+            <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
           </td>
         </tr>
       `;
       }).join('');
       
-      previousSectionHtml = `
-        <div style="margin-top: 32px; padding-top: 24px; border-top: 2px solid #f0f0f0;">
-          <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #f0f0f0;">
-            上月選擇清單（共 ${previousVideos.length} 部）
+      addedSectionHtml = `
+        <div style="margin-bottom: 24px;">
+          <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #10b981;">
+            ✅ 新增影片（共 ${addedVideos.length} 部）
           </div>
           <table style="width: 100%; border-collapse: collapse;">
             <thead>
               <tr>
                 <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;" width="40">#</th>
                 <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;">影片資訊</th>
-                <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;" width="80">片長</th>
               </tr>
             </thead>
             <tbody>
-              ${previousListHtml}
+              ${addedListHtml}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    // 建立移除影片清單 HTML
+    let removedSectionHtml = '';
+    if (removedVideos.length > 0) {
+      const removedListHtml = removedVideos.map((video, index) => {
+        return `
+        <tr style="border-bottom: 1px solid #eee; opacity: 0.7;">
+          <td style="padding: 16px 12px; color: #999; font-size: 14px;">${String(index + 1).padStart(2, '0')}</td>
+          <td style="padding: 16px 12px;">
+            <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">
+              ${video.title}
+              <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">移除</span>
+            </div>
+            <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
+          </td>
+        </tr>
+      `;
+      }).join('');
+      
+      removedSectionHtml = `
+        <div style="margin-bottom: 24px;">
+          <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #ef4444;">
+            ❌ 移除影片（共 ${removedVideos.length} 部）
+          </div>
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+              <tr>
+                <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;" width="40">#</th>
+                <th style="text-align: left; padding: 12px; color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; border-bottom: 2px solid #f0f0f0;">影片資訊</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${removedListHtml}
             </tbody>
           </table>
         </div>
@@ -549,30 +545,22 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
     
     // 建立差異摘要 HTML
     let diffSummaryHtml = '';
-    if (previousVideos.length > 0) {
+    if (addedVideos.length > 0 || removedVideos.length > 0) {
       diffSummaryHtml = `
         <div style="background: #fef3c7; border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #fde68a;">
-          <div style="font-weight: 700; font-size: 15px; color: #92400e; margin-bottom: 12px;">📊 異動摘要</div>
+          <div style="font-weight: 700; font-size: 15px; color: #92400e; margin-bottom: 12px;">📊 變更摘要</div>
           <div style="display: flex; gap: 20px; flex-wrap: wrap;">
             <div style="flex: 1; min-width: 120px;">
-              <div style="font-size: 12px; color: #92400e; margin-bottom: 4px;">上月總數</div>
-              <div style="font-size: 24px; font-weight: 700; color: #78350f;">${previousVideos.length}</div>
-            </div>
-            <div style="flex: 1; min-width: 120px;">
-              <div style="font-size: 12px; color: #92400e; margin-bottom: 4px;">本月總數</div>
-              <div style="font-size: 24px; font-weight: 700; color: #78350f;">${videos.length}</div>
-            </div>
-            <div style="flex: 1; min-width: 120px;">
-              <div style="font-size: 12px; color: #dc2626; margin-bottom: 4px;">已下架</div>
-              <div style="font-size: 24px; font-weight: 700; color: #dc2626;">${removedVideos.length}</div>
+              <div style="font-size: 12px; color: #92400e; margin-bottom: 4px;">目前總數</div>
+              <div style="font-size: 24px; font-weight: 700; color: #78350f;">${totalCount}</div>
             </div>
             <div style="flex: 1; min-width: 120px;">
               <div style="font-size: 12px; color: #10b981; margin-bottom: 4px;">新增</div>
               <div style="font-size: 24px; font-weight: 700; color: #10b981;">${addedVideos.length}</div>
             </div>
             <div style="flex: 1; min-width: 120px;">
-              <div style="font-size: 12px; color: #6b7280; margin-bottom: 4px;">保留</div>
-              <div style="font-size: 24px; font-weight: 700; color: #6b7280;">${keptVideos.length}</div>
+              <div style="font-size: 12px; color: #dc2626; margin-bottom: 4px;">移除</div>
+              <div style="font-size: 24px; font-weight: 700; color: #dc2626;">${removedVideos.length}</div>
             </div>
           </div>
         </div>
@@ -621,12 +609,8 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
                 <span class="value">${customerEmail}</span>
               </div>
               <div class="summary-item">
-                <span class="label">批次名稱</span>
-                <span class="value">${batch?.name || '未知批次'}</span>
-              </div>
-              <div class="summary-item">
-                <span class="label">選擇數量</span>
-                <span class="value" style="color: #d93025;">${videos.length} 部影片</span>
+                <span class="label">目前清單總數</span>
+                <span class="value" style="color: #d93025;">${totalCount} 部影片</span>
               </div>
               <div class="summary-item">
                 <span class="label">提交時間</span>
@@ -636,23 +620,9 @@ export async function notifyAdminCustomerSelection({ customerName, customerEmail
             
             ${diffSummaryHtml}
             
-            <div class="section-title">本月選擇清單</div>
+            ${addedSectionHtml}
             
-            <table>
-              <thead>
-                <tr>
-                  <th width="40">#</th>
-                  <th>影片資訊</th>
-                  <th width="80">片長</th>
-                  <th width="80">分級</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${videoListHtml}
-              </tbody>
-            </table>
-            
-            ${previousSectionHtml}
+            ${removedSectionHtml}
             
             <p style="margin-top: 32px; font-size: 14px; color: #666; line-height: 1.6;">
               ※ 本郵件為系統自動發送，請依照此清單協助客戶進行後續影片安排。如需與客戶聯繫，請直接回覆此郵件。

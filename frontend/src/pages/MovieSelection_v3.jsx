@@ -48,13 +48,20 @@ export default function MovieSelection() {
   
   // 客戶當前清單
   const [customerList, setCustomerList] = useState([])
-  const [customerListIds, setCustomerListIds] = useState(new Set())
+  const [customerListIds, setCustomerListIds] = useState(new Set()) // video.id 集合
+  const [customerListTitles, setCustomerListTitles] = useState(new Set()) // video.title 集合（用於跨月份判斷）
   const [loadingList, setLoadingList] = useState(false)
   
-  // 待處理變更
+  // 待處理變更（使用 video.id 作為 key，但判斷時參考 title）
   const [pendingChanges, setPendingChanges] = useState({
-    add: new Set(),
-    remove: new Set()
+    add: new Set(), // 儲存 video.id
+    remove: new Set() // 儲存 video.id
+  })
+  
+  // 待處理變更的影片標題集合（用於跨月份判斷）
+  const [pendingChangesTitles, setPendingChangesTitles] = useState({
+    add: new Set(), // 儲存 video.title
+    remove: new Set() // 儲存 video.title
   })
   
   // UI 狀態
@@ -118,7 +125,12 @@ export default function MovieSelection() {
         setCustomerList(items)
         setCustomerListIds(new Set(videoIds))
         
+        // 建立影片標題集合（用於跨月份判斷同一部影片）
+        const titles = new Set(items.map(item => item.title))
+        setCustomerListTitles(titles)
+        
         console.log(`✅ 已載入 ${items.length} 部影片`)
+        console.log(`📋 影片標題集合:`, Array.from(titles).slice(0, 5), '...')
       }
     } catch (error) {
       console.error('❌ 載入客戶清單失敗:', error)
@@ -165,18 +177,20 @@ export default function MovieSelection() {
   
   // ==================== LocalStorage 自動保存 ====================
   
-  // 保存待處理變更到 localStorage
+  // 保存待處理變更到 localStorage（同時保存 ID 和標題）
   useEffect(() => {
     if (user?.id) {
       const key = `pending-changes-${user.id}`
       const data = {
         add: Array.from(pendingChanges.add),
         remove: Array.from(pendingChanges.remove),
+        addTitles: Array.from(pendingChangesTitles.add),
+        removeTitles: Array.from(pendingChangesTitles.remove),
         savedAt: new Date().toISOString()
       }
       localStorage.setItem(key, JSON.stringify(data))
     }
-  }, [pendingChanges, user])
+  }, [pendingChanges, pendingChangesTitles, user])
   
   // 頁面載入時恢復待處理變更
   useEffect(() => {
@@ -186,7 +200,7 @@ export default function MovieSelection() {
       
       if (saved) {
         try {
-          const { add, remove, savedAt } = JSON.parse(saved)
+          const { add, remove, addTitles = [], removeTitles = [], savedAt } = JSON.parse(saved)
           
           // 檢查是否過期（24小時）
           const savedDate = new Date(savedAt)
@@ -197,6 +211,10 @@ export default function MovieSelection() {
             setPendingChanges({
               add: new Set(add),
               remove: new Set(remove)
+            })
+            setPendingChangesTitles({
+              add: new Set(addTitles),
+              remove: new Set(removeTitles)
             })
             // 只在首次載入時顯示提示，不在視窗縮放時觸發
             console.log(`✅ 已恢復 ${add.length} 個新增和 ${remove.length} 個移除的變更`)
@@ -212,15 +230,26 @@ export default function MovieSelection() {
   
   function handleVideoClick(video) {
     const videoId = video.id
-    const isOwned = customerListIds.has(videoId)
-    const isPendingAdd = pendingChanges.add.has(videoId)
-    const isPendingRemove = pendingChanges.remove.has(videoId)
+    const videoTitle = video.title
+    
+    // 使用標題判斷是否已擁有（跨月份判斷）
+    const isOwnedByTitle = customerListTitles.has(videoTitle) || pendingChangesTitles.add.has(videoTitle)
+    const isOwnedById = customerListIds.has(videoId)
+    const isPendingRemoveByTitle = pendingChangesTitles.remove.has(videoTitle)
+    
+    // 實際判斷：優先使用標題判斷（跨月份），其次使用 ID
+    const isOwned = isOwnedByTitle || isOwnedById
+    const isPendingRemove = isPendingRemoveByTitle
     
     if (isOwned && !isPendingRemove) {
       // 已擁有且未標記移除 → 標記為移除
       setPendingChanges(prev => ({
         ...prev,
         remove: new Set([...prev.remove, videoId])
+      }))
+      setPendingChangesTitles(prev => ({
+        ...prev,
+        remove: new Set([...prev.remove, videoTitle])
       }))
     } else if (isOwned && isPendingRemove) {
       // 已擁有且已標記移除 → 取消移除
@@ -229,32 +258,52 @@ export default function MovieSelection() {
         newRemove.delete(videoId)
         return { ...prev, remove: newRemove }
       })
-    } else if (!isOwned && !isPendingAdd) {
-      // 未擁有且未標記新增 → 標記為新增
+      setPendingChangesTitles(prev => {
+        const newRemove = new Set(prev.remove)
+        newRemove.delete(videoTitle)
+        return { ...prev, remove: newRemove }
+      })
+    } else if (!isOwned) {
+      // 未擁有 → 標記為新增
       setPendingChanges(prev => ({
         ...prev,
         add: new Set([...prev.add, videoId])
       }))
-    } else if (!isOwned && isPendingAdd) {
-      // 未擁有且已標記新增 → 取消新增
+      setPendingChangesTitles(prev => ({
+        ...prev,
+        add: new Set([...prev.add, videoTitle])
+      }))
+    } else {
+      // 已標記新增 → 取消新增
       setPendingChanges(prev => {
         const newAdd = new Set(prev.add)
         newAdd.delete(videoId)
         return { ...prev, add: newAdd }
       })
+      setPendingChangesTitles(prev => {
+        const newAdd = new Set(prev.add)
+        newAdd.delete(videoTitle)
+        return { ...prev, add: newAdd }
+      })
     }
   }
   
-  // 計算影片的顯示狀態
+  // 計算影片的顯示狀態（使用標題判斷，支援跨月份）
   function getVideoDisplayState(video) {
     const videoId = video.id
-    const isOwned = customerListIds.has(videoId)
-    const isPendingAdd = pendingChanges.add.has(videoId)
-    const isPendingRemove = pendingChanges.remove.has(videoId)
+    const videoTitle = video.title
     
-    if (isOwned && !isPendingRemove) return 'owned'
-    if (isOwned && isPendingRemove) return 'pending_remove'
-    if (!isOwned && isPendingAdd) return 'pending_add'
+    // 使用標題判斷是否已擁有（跨月份判斷）
+    const isOwnedByTitle = customerListTitles.has(videoTitle)
+    const isOwnedById = customerListIds.has(videoId)
+    const isPendingAddByTitle = pendingChangesTitles.add.has(videoTitle)
+    const isPendingRemoveByTitle = pendingChangesTitles.remove.has(videoTitle)
+    
+    const isOwned = isOwnedByTitle || isOwnedById
+    
+    if (isOwned && !isPendingRemoveByTitle) return 'owned'
+    if (isOwned && isPendingRemoveByTitle) return 'pending_remove'
+    if (!isOwned && isPendingAddByTitle) return 'pending_add'
     return 'available'
   }
   
@@ -270,9 +319,9 @@ export default function MovieSelection() {
     const allVideos = Object.values(allMonthsVideos).flat()
     const addedVideos = allVideos.filter(v => pendingChanges.add.has(v.id))
     
-    // 移除重複的影片（同一影片可能出現在多個月份）
+    // 使用標題去重（同一影片可能出現在多個月份，但只顯示一次）
     const uniqueAddedVideos = Array.from(
-      new Map(addedVideos.map(v => [v.id, v])).values()
+      new Map(addedVideos.map(v => [v.title, v])).values()
     )
     
     const removedVideos = customerList
@@ -326,6 +375,7 @@ export default function MovieSelection() {
       
       // 3. 清空待處理變更
       setPendingChanges({ add: new Set(), remove: new Set() })
+      setPendingChangesTitles({ add: new Set(), remove: new Set() })
       
       // 4. 清空 localStorage
       const key = `pending-changes-${user.id}`
@@ -350,6 +400,7 @@ export default function MovieSelection() {
   
   function cancelChanges() {
     setPendingChanges({ add: new Set(), remove: new Set() })
+    setPendingChangesTitles({ add: new Set(), remove: new Set() })
     
     // 清空 localStorage
     if (user?.id) {
