@@ -15,7 +15,7 @@ import {
   Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, 
   Grid, List as ListIcon, Send, History, X, Check, Plus, Minus 
 } from 'lucide-react'
-import MovieCard from '../components/MovieCard'
+import MovieCard_v3 from '../components/MovieCard_v3'
 import Select from '../components/Select'
 import BrandTransition from '../components/BrandTransition'
 import { 
@@ -165,7 +165,7 @@ export default function MovieSelection() {
   
   // 頁面載入時恢復待處理變更
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && customerList.length > 0) {
       const key = `pending-changes-${user.id}`
       const saved = localStorage.getItem(key)
       
@@ -183,14 +183,15 @@ export default function MovieSelection() {
               add: new Set(add),
               remove: new Set(remove)
             })
-            showToast('info', `已恢復 ${add.length} 個新增和 ${remove.length} 個移除的變更`)
+            // 只在首次載入時顯示提示，不在視窗縮放時觸發
+            console.log(`✅ 已恢復 ${add.length} 個新增和 ${remove.length} 個移除的變更`)
           }
         } catch (error) {
           console.error('恢復變更失敗:', error)
         }
       }
     }
-  }, [user])
+  }, [user, customerList.length])
   
   // ==================== 影片點擊邏輯 ====================
   
@@ -327,7 +328,14 @@ export default function MovieSelection() {
   
   function cancelChanges() {
     setPendingChanges({ add: new Set(), remove: new Set() })
-    showToast('info', '已取消所有變更')
+    
+    // 清空 localStorage
+    if (user?.id) {
+      const key = `pending-changes-${user.id}`
+      localStorage.removeItem(key)
+    }
+    
+    showToast('success', '已取消所有變更')
   }
   
   // ==================== 計算屬性 ====================
@@ -433,7 +441,8 @@ export default function MovieSelection() {
             </h2>
             <button
               onClick={() => setShowOwnedSection(false)}
-              className="text-gray-400 hover:text-gray-600"
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              title="關閉"
             >
               <X className="w-5 h-5" />
             </button>
@@ -444,9 +453,9 @@ export default function MovieSelection() {
               您尚未選擇任何影片
             </p>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {ownedVideosForDisplay.map(video => (
-                <MovieCard
+                <MovieCard_v3
                   key={video.id}
                   video={video}
                   selected={getVideoDisplayState(video) !== 'pending_remove'}
@@ -461,9 +470,37 @@ export default function MovieSelection() {
       
       {/* 當前月份的可選影片 */}
       <div>
-        <h2 className="text-xl font-bold text-gray-900 mb-4">
-          {selectedMonth} 可選影片 ({monthlyVideos.length} 部)
-        </h2>
+        {/* 標題列與視圖切換 */}
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-bold text-gray-900">
+            {selectedMonth} 可選影片 ({monthlyVideos.length} 部)
+          </h2>
+          
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'grid'
+                  ? 'bg-purple-100 text-purple-600'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+              title="網格視圖"
+            >
+              <Grid className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-2 rounded-lg transition-colors ${
+                viewMode === 'list'
+                  ? 'bg-purple-100 text-purple-600'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+              title="清單視圖"
+            >
+              <ListIcon className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
         
         {loadingVideos ? (
           <div className="flex items-center justify-center py-12">
@@ -474,10 +511,10 @@ export default function MovieSelection() {
             <Film className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <p className="text-gray-500">該月份尚無可選影片</p>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
             {monthlyVideos.map(video => (
-              <MovieCard
+              <MovieCard_v3
                 key={video.id}
                 video={video}
                 selected={['owned', 'pending_add'].includes(getVideoDisplayState(video))}
@@ -485,6 +522,91 @@ export default function MovieSelection() {
                 displayState={getVideoDisplayState(video)}
               />
             ))}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {monthlyVideos.map(video => {
+              const state = getVideoDisplayState(video)
+              
+              // 狀態樣式
+              const getListStateStyles = () => {
+                switch (state) {
+                  case 'owned':
+                    return {
+                      bg: 'bg-blue-50 border-blue-300',
+                      icon: Check,
+                      iconColor: 'text-blue-600',
+                      badge: 'bg-blue-500 text-white',
+                      badgeText: '已擁有'
+                    }
+                  case 'pending_add':
+                    return {
+                      bg: 'bg-green-50 border-green-300',
+                      icon: Plus,
+                      iconColor: 'text-green-600',
+                      badge: 'bg-green-500 text-white',
+                      badgeText: '待新增'
+                    }
+                  case 'pending_remove':
+                    return {
+                      bg: 'bg-red-50 border-red-300',
+                      icon: Minus,
+                      iconColor: 'text-red-600',
+                      badge: 'bg-red-500 text-white',
+                      badgeText: '待移除'
+                    }
+                  default:
+                    return {
+                      bg: 'bg-white border-gray-200 hover:border-gray-300',
+                      icon: null,
+                      iconColor: 'text-gray-300',
+                      badge: null,
+                      badgeText: null
+                    }
+                }
+              }
+              
+              const listStyles = getListStateStyles()
+              const ListIcon = listStyles.icon || CheckCircle
+              
+              return (
+                <div
+                  key={video.id}
+                  onClick={() => handleVideoClick(video)}
+                  className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer ${listStyles.bg}`}
+                >
+                  <div className={`flex-shrink-0 ${listStyles.iconColor}`}>
+                    <ListIcon className="h-5 w-5" />
+                  </div>
+                  
+                  {video.thumbnail_url && (
+                    <div className="flex-shrink-0 w-12 h-16 rounded overflow-hidden bg-gray-100">
+                      <img 
+                        src={video.thumbnail_url} 
+                        alt={video.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold text-gray-900 line-clamp-1">{video.title}</h4>
+                    {video.title_en && (
+                      <p className="text-sm text-gray-500 line-clamp-1">{video.title_en}</p>
+                    )}
+                    {video.duration && (
+                      <p className="text-xs text-gray-400 mt-1">{video.duration} 分鐘</p>
+                    )}
+                  </div>
+                  
+                  {listStyles.badge && (
+                    <span className={`${listStyles.badge} text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0`}>
+                      {listStyles.badgeText}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
