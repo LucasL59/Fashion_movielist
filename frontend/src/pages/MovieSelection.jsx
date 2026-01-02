@@ -126,15 +126,17 @@ export default function MovieSelection() {
     try {
       setLoadingMonths(true)
       const response = await getAvailableMonths()
-      const months = response.data || []
-      setAvailableMonths(months)
+      const monthsData = response.data || []
+      setAvailableMonths(monthsData)
       
       // 預設選擇當前月份
       const currentMonth = new Date().toISOString().slice(0, 7)
-      if (months.includes(currentMonth)) {
+      const monthStrings = monthsData.map(m => m.month)
+      
+      if (monthStrings.includes(currentMonth)) {
         setSelectedMonth(currentMonth)
-      } else if (months.length > 0) {
-        setSelectedMonth(months[0])
+      } else if (monthsData.length > 0) {
+        setSelectedMonth(monthsData[0].month)
       }
     } catch (error) {
       console.error('❌ 載入月份列表失敗:', error)
@@ -498,17 +500,17 @@ export default function MovieSelection() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          {availableMonths.map((month) => (
+          {availableMonths.map((monthData) => (
             <button
-              key={month}
-              onClick={() => setSelectedMonth(month)}
+              key={monthData.month}
+              onClick={() => setSelectedMonth(monthData.month)}
               className={`px-4 py-2 rounded-xl font-medium transition-all ${
-                selectedMonth === month
+                selectedMonth === monthData.month
                   ? 'bg-purple-500 text-white shadow-md'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              {formatMonth(month)}
+              {formatMonth(monthData.month)}
             </button>
           ))}
         </div>

@@ -185,15 +185,32 @@ router.get('/months', async (req, res) => {
     
     if (error) throw error;
     
-    // 提取月份並去重
-    const months = [...new Set(batches.map(b => b.month))].filter(Boolean);
+    // 格式化為物件陣列，包含月份和批次名稱
+    const monthsData = batches
+      .filter(b => b.month) // 過濾掉沒有月份的
+      .map(b => ({
+        month: b.month,
+        batchName: b.name,
+        createdAt: b.created_at
+      }));
     
-    console.log(`✅ [videos/months] 找到 ${months.length} 個可用月份`);
+    // 按月份去重（保留最新的）
+    const uniqueMonths = [];
+    const seenMonths = new Set();
+    
+    for (const item of monthsData) {
+      if (!seenMonths.has(item.month)) {
+        seenMonths.add(item.month);
+        uniqueMonths.push(item);
+      }
+    }
+    
+    console.log(`✅ [videos/months] 找到 ${uniqueMonths.length} 個可用月份`);
     
     res.json({
       success: true,
-      data: months,
-      count: months.length
+      data: uniqueMonths,
+      count: uniqueMonths.length
     });
     
   } catch (error) {

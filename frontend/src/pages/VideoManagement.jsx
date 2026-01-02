@@ -48,16 +48,18 @@ export default function VideoManagement() {
     try {
       setLoadingMonths(true)
       const response = await getAvailableMonths()
-      const months = response.data || []
-      setAvailableMonths(months)
+      const monthsData = response.data || []
+      setAvailableMonths(monthsData)
       
       // 預設選擇當月
       const currentMonth = new Date().toISOString().slice(0, 7) // YYYY-MM
-      if (months.includes(currentMonth)) {
+      const monthStrings = monthsData.map(m => m.month)
+      
+      if (monthStrings.includes(currentMonth)) {
         setSelectedMonth(currentMonth)
-      } else if (months.length > 0) {
+      } else if (monthsData.length > 0) {
         // 如果當月沒有，選擇最新的月份
-        setSelectedMonth(months[0])
+        setSelectedMonth(monthsData[0].month)
       } else {
         // 沒有任何月份，載入最新的
         loadVideos()
@@ -153,9 +155,9 @@ export default function VideoManagement() {
                 <Select
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
-                  options={availableMonths.map((month) => ({
-                    value: month,
-                    label: formatMonth(month)
+                  options={availableMonths.map((monthData) => ({
+                    value: monthData.month,
+                    label: `${formatMonth(monthData.month)} - ${monthData.batchName}`
                   }))}
                   placeholder="選擇月份"
                 />
