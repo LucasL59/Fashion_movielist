@@ -36,18 +36,35 @@ function getAccessToken() {
   }
 }
 
-// 請求攔截器（添加認證 token）
+// 請求攔截器（添加認證 token 和禁用緩存）
 api.interceptors.request.use((config) => {
   const token = getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  
+  // 禁用緩存以避免 304 Not Modified 問題
+  config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+  config.headers['Pragma'] = 'no-cache'
+  config.headers['Expires'] = '0'
+  
   return config
 })
 
 // 響應攔截器（統一錯誤處理）
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // 處理 304 Not Modified 等沒有 response body 的情況
+    if (!response.data && response.status === 304) {
+      console.warn(`⚠️ 收到 304 響應 (${response.config.url})，使用空數據`)
+      response.data = {
+        success: true,
+        data: [],
+        count: 0
+      }
+    }
+    return response
+  },
   (error) => {
     console.error('API Error:', error)
     return Promise.reject(error)
@@ -209,7 +226,19 @@ export async function getCurrentOwnedVideos(userId) {
 export async function getCustomerList(customerId) {
   console.log(`🔍 載入客戶清單...`)
   const response = await api.get(`/api/customer-list/${customerId}`)
-  console.log(`✅ 已載入 ${response.data.count} 部影片`)
+  
+  // 處理 304 Not Modified 或其他沒有 body 的情況
+  if (!response.data) {
+    console.log('⚠️ API 返回空響應（可能是 304），返回空清單')
+    return {
+      success: true,
+      data: [],
+      count: 0
+    }
+  }
+  
+  const count = response.data?.count ?? response.data?.data?.length ?? 0
+  console.log(`✅ 已載入 ${count} 部影片`)
   return response.data
 }
 
