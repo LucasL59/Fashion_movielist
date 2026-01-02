@@ -1,6 +1,6 @@
 # 每月影片選擇系統 (Monthly Movie Selection System)
 
-> **版本**：v2.1.2 ｜ **最後更新**：2025-11-24 ｜ **狀態**：✅ 可部署、可測試
+> **版本**：v3.0.0 ｜ **最後更新**：2026-01-03 ｜ **狀態**：✅ 可部署、可測試
 
 ## 🔰 專案簡介
 
@@ -37,7 +37,51 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 - 完整影片編輯流程：Admin/Uploader 可即時更新影片資訊與封面
 - BrandTransition + Glassmorphism UI，確保登入/登出體驗與主要頁面動線一致
 
-## 🆕 2025-11-24 更新重點
+## 🆕 2026-01-03 更新重點 (v3.0.0)
+
+> 完整說明請見相關技術文檔
+
+### 核心重構與修正
+
+- **🎯 影片選擇頁面重構（MovieSelection_v3）**：全新的客戶清單管理系統，支援跨月份選擇、待處理變更追蹤、LocalStorage 自動保存。
+- **🐛 關鍵 Bug 修正**：
+  - 修正 `currentSelectedIds` 未定義錯誤，使用 `useMemo` 計算當前選擇影片總數
+  - 修正 API 響應格式不一致問題（`backend/customerList.js` 返回格式統一）
+  - 修正月份選擇器顯示 "undefined-undefined" 問題
+  - 修正 Select 組件事件處理，確保正確提取 `e.target.value`
+  
+### UI/UX 全面優化
+
+- **🎨 視覺升級**：
+  - 全站主題色統一為橘色（Primary），移除所有紫色元素
+  - 新增 `MovieCard_v3` 組件，提供清晰的視覺狀態回饋（已選擇、待新增、待移除）
+  - 支援網格/列表雙視圖模式切換
+  - 頁面 padding 與其他頁面保持一致性
+  
+- **✨ 懸浮卡片優化**：
+  - 使用 React Portal 確保卡片固定在瀏覽器視窗底部（而非頁面底部）
+  - 增強毛玻璃效果（Glassmorphism）：漸層透明度、模糊 20px、飽和度增強 180%
+  - 實時顯示已選擇影片數量、新增數量、移除數量
+  
+- **📢 Toast 訊息修正**：
+  - 修正所有 `showToast` 參數順序，確保訊息正確顯示
+  - 所有提示訊息統一為中文（移除 "success"、"error" 等英文提示）
+
+### 技術改進
+
+- **⚡ 性能優化**：使用 `useMemo` 避免不必要的重複計算
+- **🔧 代碼品質**：移除多餘的 info toast 提示，改進事件處理邏輯
+- **📦 組件化**：建立可重用的 `MovieCard_v3` 組件，支援多種顯示模式
+
+### 參考文檔
+
+- [REFACTOR_V3_DEPLOYMENT_GUIDE.md](REFACTOR_V3_DEPLOYMENT_GUIDE.md) - v3 重構部署指南
+- [CRITICAL_BUG_FIX.md](CRITICAL_BUG_FIX.md) - 關鍵錯誤修正
+- [UI_UX_OPTIMIZATION_SUMMARY.md](UI_UX_OPTIMIZATION_SUMMARY.md) - UI/UX 優化總結
+- [PORTAL_FIX_SUMMARY.md](PORTAL_FIX_SUMMARY.md) - Portal 修正說明
+- [GLASSMORPHISM_TOAST_FIX.md](GLASSMORPHISM_TOAST_FIX.md) - 毛玻璃效果與 Toast 修正
+
+## 📜 2025-11-24 更新重點 (v2.x)
 
 > 完整說明請見 [UPDATE_SUMMARY_2025_11_24.md](UPDATE_SUMMARY_2025_11_24.md)
 
@@ -76,10 +120,13 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 
 #### 客戶 (Customer)
 - ✅ 瀏覽當月可選擇的影片清單（含圖片）
-- ✅ 選擇想要的影片
+- ✅ 選擇想要的影片（支援網格/列表雙視圖）
+- ✅ 跨月份選擇影片（從任何可用月份添加至清單）
+- ✅ 即時查看已選擇影片狀態（已擁有、待新增、待移除）
+- ✅ 懸浮卡片顯示當前選擇數量與待處理變更
 - ✅ 自動檢視上月已選片單，可比對異動
 - ✅ 提交前確認下架與新增清單
-- ✅ 提交選擇清單
+- ✅ 提交選擇清單（變更自動保存至 LocalStorage）
 - ✅ 接收新清單上傳通知
 
 ### 自動化功能
@@ -231,17 +278,21 @@ npm run build
 
 ### UI/UX 設計準則與優化
 
-- v2.1.1 ~ v2.1.2 圍繞 **Apple 風格 + Glassmorphism**：白底、毛玻璃、圓角 12~16px、對比明確與 200ms 過渡。詳細參考 [UI_IMPROVEMENTS_SUMMARY.md](UI_IMPROVEMENTS_SUMMARY.md) 與 [DESIGN_REFINEMENT_SUMMARY.md](DESIGN_REFINEMENT_SUMMARY.md)。
-- 按鈕樣式：橘色純色（最新設計）或紫色漸層（早期版本）皆保留統一的 `btn` 原子類別，具備 hover 陰影、active 壓縮、focus ring 與禁用態。
+- v3.0.0 全面統一 **橘色主題（Primary）+ 增強毛玻璃效果**：所有紫色元素已移除，全站採用橘色作為主題色。
+- **Glassmorphism 升級**：懸浮卡片採用漸層透明度（80% → 70% → 60%）、模糊 20px、飽和度增強 180%，創造深度感與質感。
+- **React Portal 應用**：懸浮元素（如待處理變更卡片）使用 `createPortal` 渲染至 `document.body`，確保固定在瀏覽器視窗底部，不受頁面滾動影響。
+- 按鈕樣式：橘色純色/漸層統一為 `btn` 原子類別，具備 hover 陰影、active 壓縮、focus ring 與禁用態。
 - 輸入框：全白背景、2px 邊框、橘色 focus ring、`rounded-xl`，確保登入/註冊可讀性。
-- 影片選擇頁支援 Grid / List 視圖切換、已選狀態記憶與空狀態插圖，並新增浮動選單 Bar 呈現目前選擇。
+- 影片選擇頁（v3）：支援 Grid / List 視圖切換、跨月份選擇、即時視覺狀態回饋、待處理變更追蹤、LocalStorage 自動保存。
 - Login/BrandTransition 介面採 Split Layout + 毛玻璃卡片；Footer 提供完整公司資訊、法律條款與支援連結。
+- 詳細參考：[UI_IMPROVEMENTS_SUMMARY.md](UI_IMPROVEMENTS_SUMMARY.md)、[DESIGN_REFINEMENT_SUMMARY.md](DESIGN_REFINEMENT_SUMMARY.md)、[UI_UX_OPTIMIZATION_SUMMARY.md](UI_UX_OPTIMIZATION_SUMMARY.md)。
 
 ### 核心共用組件與訊息系統
 
-- `Select.jsx`：自定義下拉選單，提供跨瀏覽器一致 UI、hover/focus 樣式與滾動條優化。
-- `ToastContext.jsx`：統一路徑訊息，依成功/錯誤/警告/資訊套用不同底色並具滑入淡出動畫（取代舊 alert）。
+- `Select.jsx`：自定義下拉選單，提供跨瀏覽器一致 UI、hover/focus 樣式與滾動條優化。事件處理已修正為正確的 `e.target.value` 格式。
+- `ToastContext.jsx`：統一路徑訊息，依成功/錯誤/警告/資訊套用不同底色並具滑入淡出動畫（取代舊 alert）。所有訊息參數順序已統一為 `(message, type)`。
 - `Modal.jsx`：採用原生 `createPortal`，內建 ESC/背景關閉、focus trap、scroll lock，移除對 headless UI 依賴。
+- `MovieCard_v3.jsx` ⭐ 新增：增強型影片卡片組件，支援多種視覺狀態（已擁有、待新增、待移除）與網格/列表雙顯示模式。
 - `emailService.js`：郵件模板改為極簡排版 + 摘要資訊卡，並提供可帶主旨的支援連結。
 
 ### 法律文件與頁腳
@@ -292,6 +343,8 @@ npm run build
 | 目的 | 推薦閱讀 |
 |------|-----------|
 | 第一次接觸 | [START_HERE.md](START_HERE.md)、[QUICK_START.md](QUICK_START.md)、[QUICK_REFERENCE.md](QUICK_REFERENCE.md) |
+| 了解 v3.0 更新 | [REFACTOR_V3_DEPLOYMENT_GUIDE.md](REFACTOR_V3_DEPLOYMENT_GUIDE.md)、[CRITICAL_BUG_FIX.md](CRITICAL_BUG_FIX.md)、[UI_UX_OPTIMIZATION_SUMMARY.md](UI_UX_OPTIMIZATION_SUMMARY.md) |
+| v3.0 技術修正 | [PORTAL_FIX_SUMMARY.md](PORTAL_FIX_SUMMARY.md)、[GLASSMORPHISM_TOAST_FIX.md](GLASSMORPHISM_TOAST_FIX.md)、[UI_FIX_SUMMARY.md](UI_FIX_SUMMARY.md) |
 | 了解 v2.0 更新 | [UPDATE_SUMMARY.md](UPDATE_SUMMARY.md)、[ANSWERS_TO_YOUR_QUESTIONS.md](ANSWERS_TO_YOUR_QUESTIONS.md)、[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) |
 | v2.1 功能與 UI 改版 | [NEW_FEATURES_SUMMARY.md](NEW_FEATURES_SUMMARY.md)、[UI_IMPROVEMENTS_SUMMARY.md](UI_IMPROVEMENTS_SUMMARY.md)、[DESIGN_REFINEMENT_SUMMARY.md](DESIGN_REFINEMENT_SUMMARY.md) |
 | 2025-11 優化與調整 | [UPDATE_SUMMARY_2025_11_24.md](UPDATE_SUMMARY_2025_11_24.md)、[OPTIMIZATION_LOG_2025_11.md](OPTIMIZATION_LOG_2025_11.md) |
@@ -377,9 +430,13 @@ values (
 
 ## 📈 專案狀態與聯絡
 
-- **版本**：v2.0.0 （2025-11-24 更新）
-- **程式碼行數**：~6,000 行 ｜ **文件字數**：~25,000 字
-- **里程碑**：三層權限、用戶管理、操作紀錄、提醒設定全數完成
+- **版本**：v3.0.0 （2026-01-03 更新）
+- **程式碼行數**：~7,000 行 ｜ **文件字數**：~35,000 字
+- **里程碑**：
+  - ✅ 三層權限、用戶管理、操作紀錄、提醒設定
+  - ✅ 影片選擇系統 v3 重構（跨月份選擇、待處理變更追蹤）
+  - ✅ UI/UX 全面優化（毛玻璃效果、主題色統一、視圖切換）
+  - ✅ 關鍵 Bug 修正（API 格式、事件處理、Toast 訊息）
 
 如需協助或發現文件錯誤，請與系統管理員聯繫或於文件中標註 TODO。
 
