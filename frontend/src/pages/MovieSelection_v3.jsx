@@ -330,12 +330,14 @@ export default function MovieSelection() {
       .filter(Boolean)
     
     const currentTotal = customerListIds.size
-    const newTotal = currentTotal - pendingChanges.remove.size + pendingChanges.add.size
+    // 使用去重後的數量計算新總數
+    const actualAddedCount = uniqueAddedVideos.length
+    const newTotal = currentTotal - pendingChanges.remove.size + actualAddedCount
     
     setConfirmData({
       currentTotal,
       newTotal,
-      addedCount: pendingChanges.add.size,
+      addedCount: actualAddedCount,  // 使用去重後的數量
       removedCount: pendingChanges.remove.size,
       addedVideos: uniqueAddedVideos,
       removedVideos
@@ -350,8 +352,11 @@ export default function MovieSelection() {
       console.log('📤 提交客戶清單...')
       
       // 1. 更新客戶清單
+      // 使用去重後的影片 ID（避免同一影片在不同月份有多個 ID）
+      const uniqueAddedVideoIds = confirmData.addedVideos.map(v => v.id)
+      
       await updateCustomerList(user.id, {
-        addVideoIds: Array.from(pendingChanges.add),
+        addVideoIds: uniqueAddedVideoIds,  // 使用去重後的 ID
         removeVideoIds: Array.from(pendingChanges.remove),
         batchId: currentBatch?.id,
         month: selectedMonth,
