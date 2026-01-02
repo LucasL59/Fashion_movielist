@@ -377,7 +377,7 @@ export default function MovieSelection() {
           <Calendar className="w-5 h-5 text-gray-500" />
           <Select
             value={selectedMonth}
-            onChange={setSelectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
             options={availableMonths.map(m => ({
               value: m.month,
               label: `${m.month} - ${m.batchName}`
