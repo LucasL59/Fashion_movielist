@@ -267,13 +267,13 @@ export default function MovieSelection() {
       })
       
       // 2. 提交清單（記錄歷史快照）
-      const addedVideosDetails = changesForDisplay.added.map(v => ({
+      const addedVideosDetails = (changesForDisplay?.added || []).map(v => ({
         id: v.id,
         title: v.title,
         title_en: v.title_en
       }))
       
-      const removedVideosDetails = changesForDisplay.removed.map(v => ({
+      const removedVideosDetails = (changesForDisplay?.removed || []).map(v => ({
         id: v.id,
         title: v.title,
         title_en: v.title_en
@@ -648,7 +648,7 @@ export default function MovieSelection() {
                     ✅ 新增 {changesForDisplay.addedCount} 部影片
                   </h4>
                   <div className="space-y-2">
-                    {changesForDisplay.added.map(v => (
+                    {(changesForDisplay?.added || []).map(v => (
                       <div key={v.id} className="text-sm text-gray-700 bg-green-50 p-2 rounded">
                         {v.title} {v.title_en ? `(${v.title_en})` : ''}
                       </div>
@@ -664,7 +664,7 @@ export default function MovieSelection() {
                     ❌ 移除 {changesForDisplay.removedCount} 部影片
                   </h4>
                   <div className="space-y-2">
-                    {changesForDisplay.removed.map(v => (
+                    {(changesForDisplay?.removed || []).map(v => (
                       <div key={v.id} className="text-sm text-gray-700 bg-red-50 p-2 rounded">
                         {v.title} {v.title_en ? `(${v.title_en})` : ''}
                       </div>
