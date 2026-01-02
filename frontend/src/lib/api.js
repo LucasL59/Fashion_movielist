@@ -232,12 +232,15 @@ export async function getCustomerList(customerId) {
     console.log('⚠️ API 返回空響應（可能是 304），返回空清單')
     return {
       success: true,
-      data: [],
+      data: {
+        items: [],
+        videoIds: []
+      },
       count: 0
     }
   }
   
-  const count = response.data?.count ?? response.data?.data?.length ?? 0
+  const count = response.data?.count ?? response.data?.data?.items?.length ?? 0
   console.log(`✅ 已載入 ${count} 部影片`)
   return response.data
 }

@@ -83,11 +83,17 @@ router.get('/:customerId', requireAuth, async (req, res) => {
         list_item_id: item.id
       }));
 
+    // 提取 video IDs 陣列（用於前端快速查找）
+    const videoIds = formattedList.map(item => item.id);
+
     console.log(`✅ [customer-list] 找到 ${formattedList.length} 筆記錄`);
 
     res.json({
       success: true,
-      data: formattedList,
+      data: {
+        items: formattedList,
+        videoIds: videoIds
+      },
       count: formattedList.length
     });
   } catch (error) {

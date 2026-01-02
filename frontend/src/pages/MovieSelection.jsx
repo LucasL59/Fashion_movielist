@@ -175,14 +175,15 @@ export default function MovieSelection() {
         return
       }
 
-      if (response.success && response.data && Array.isArray(response.data)) {
-        console.log(`✅ [STEP 3-OK] 資料驗證通過，Array 長度: ${response.data.length}`)
-        const dataArray = Array.from(response.data)  // 強制創建新陣列副本
+      // 適配新的 API 格式：response.data = { items: [...], videoIds: [...] }
+      if (response.success && response.data) {
+        const { items = [], videoIds = [] } = response.data
+        console.log(`✅ [STEP 3-OK] 資料驗證通過，Array 長度: ${items.length}`)
+        const dataArray = Array.from(items)  // 強制創建新陣列副本
         console.log(`✅ [STEP 4] 創建副本完成，長度: ${dataArray.length}`)
         
         setCustomerList(dataArray)
-        const videoIds = new Set(dataArray.map(v => (v?.id || null)).filter(Boolean))
-        setCustomerVideoIds(videoIds)
+        setCustomerVideoIds(new Set(videoIds))
         
         console.log(`✅ [STEP 5 - FINAL] 已載入客戶清單: ${dataArray.length} 部影片`)
       } else {
