@@ -61,6 +61,11 @@ export default function MovieSelection() {
   const [confirmData, setConfirmData] = useState(null)
   const [submitting, setSubmitting] = useState(false)
   
+  // 計算當前選擇的影片總數
+  const currentSelectedCount = useMemo(() => {
+    return customerListIds.size - pendingChanges.remove.size + pendingChanges.add.size
+  }, [customerListIds, pendingChanges.add.size, pendingChanges.remove.size])
+  
   // ==================== 載入資料 ====================
   
   // 載入可用月份
@@ -360,9 +365,9 @@ export default function MovieSelection() {
   }
   
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="space-y-8">
       {/* 頁面標題與月份選擇器 */}
-      <div className="mb-8">
+      <div>
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
             <Film className="w-8 h-8 text-primary-600" />
@@ -410,7 +415,7 @@ export default function MovieSelection() {
                     待處理變更
                   </p>
                   <p className="text-sm text-gray-600">
-                    已選擇 <span className="font-semibold text-primary-600">{currentSelectedIds.size}</span> 部影片
+                    已選擇 <span className="font-semibold text-primary-600">{currentSelectedCount}</span> 部影片
                     {pendingChanges.add.size > 0 && <span className="text-green-600"> • 新增 {pendingChanges.add.size}</span>}
                     {pendingChanges.remove.size > 0 && <span className="text-red-600"> • 移除 {pendingChanges.remove.size}</span>}
                   </p>
