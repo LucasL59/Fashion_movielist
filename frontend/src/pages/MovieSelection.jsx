@@ -145,41 +145,69 @@ export default function MovieSelection() {
   }
 
   async function loadCustomerList() {
-    if (!user?.id) return
+    if (!user?.id) {
+      console.log('⚠️ loadCustomerList: 用戶 ID 不存在')
+      return
+    }
     
     try {
       setLoadingCustomerList(true)
+      console.log(`🔄 [STEP 1] 開始呼叫 getCustomerList(${user.id})`)
+      
       const response = await getCustomerList(user.id)
+      
+      console.log('📦 [STEP 2] 收到響應:', {
+        type: typeof response,
+        exists: !!response,
+        keys: response ? Object.keys(response) : [],
+        success: response?.success,
+        hasData: 'data' in (response || {}),
+        dataValue: response?.data,
+        dataType: typeof response?.data,
+        isArray: Array.isArray(response?.data)
+      })
       
       // 確保 response 和 response.data 存在
       if (!response || typeof response !== 'object') {
-        console.error('⚠️ getCustomerList 返回了無效的響應:', response)
+        console.error('⚠️ [STEP 3-ERR] getCustomerList 返回了無效的響應:', response)
         setCustomerList([])
         setCustomerVideoIds(new Set())
         return
       }
 
       if (response.success && response.data && Array.isArray(response.data)) {
-        setCustomerList(response.data)
-        const videoIds = new Set(response.data.map(v => v.id))
+        console.log(`✅ [STEP 3-OK] 資料驗證通過，Array 長度: ${response.data.length}`)
+        const dataArray = Array.from(response.data)  // 強制創建新陣列副本
+        console.log(`✅ [STEP 4] 創建副本完成，長度: ${dataArray.length}`)
+        
+        setCustomerList(dataArray)
+        const videoIds = new Set(dataArray.map(v => (v?.id || null)).filter(Boolean))
         setCustomerVideoIds(videoIds)
-        console.log(`✅ 已載入客戶清單: ${response.data.length} 部影片`)
+        
+        console.log(`✅ [STEP 5 - FINAL] 已載入客戶清單: ${dataArray.length} 部影片`)
       } else {
-        // 沒有資料或格式不正確，初始化為空陣列
+        console.log('ℹ️ [STEP 3-EMPTY] 客戶清單為空:', {
+          success: response.success,
+          hasData: !!response.data,
+          type: typeof response.data
+        })
         setCustomerList([])
         setCustomerVideoIds(new Set())
-        console.log('ℹ️ 客戶尚未建立清單（響應格式不符或無數據）')
       }
     } catch (error) {
-      console.error('❌ 載入客戶清單失敗:', error)
-      // 初始化為空陣列，避免 undefined 錯誤
+      console.error('❌ [CATCH] 載入客戶清單失敗:', {
+        name: error?.name,
+        message: error?.message,
+        status: error?.response?.status,
+        stack: error?.stack?.split('\n').slice(0, 3)
+      })
       setCustomerList([])
       setCustomerVideoIds(new Set())
-      // 只在非 404 錯誤時顯示 toast
-      if (error.response?.status !== 404) {
+      if (error?.response?.status !== 404) {
         showToast('載入您的影片清單失敗', 'error')
       }
     } finally {
+      console.log('🏁 [FINALLY] loadCustomerList 流程結束')
       setLoadingCustomerList(false)
     }
   }
