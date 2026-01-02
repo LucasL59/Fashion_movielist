@@ -5,6 +5,7 @@
  */
 
 import express from 'express';
+import { supabase } from '../config/supabase.js';
 import { parseExcelAndUpload } from '../services/excelService.js';
 import { notifyCustomersNewList } from '../services/emailService.js';
 import { requireAuth, requireRoles } from '../middleware/auth.js';
