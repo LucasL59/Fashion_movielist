@@ -573,222 +573,6 @@ export default function MailManagement() {
         </p>
       </div>
 
-      {/* 客戶提交影片選擇通知 */}
-      <section className="card bg-white border-primary-100 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg">
-              <Mail className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">客戶提交影片選擇通知</h2>
-              <p className="text-sm text-gray-500">客戶提交選擇時自動通知管理員與上傳者</p>
-              {!mailToggles.selection_submitted?.enabled && (
-                <p className="text-xs text-gray-400 mt-1">啟用後所有變更會立即套用，無需手動儲存</p>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => handleToggleMailNotification('selection_submitted')}
-              disabled={mailTogglesSyncing}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                mailToggles.selection_submitted?.enabled ? 'bg-primary-600' : 'bg-gray-200'
-              } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <span className="sr-only">啟用客戶提交通知</span>
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  mailToggles.selection_submitted?.enabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-            <span className={`text-sm font-medium ${mailToggles.selection_submitted?.enabled ? 'text-primary-700' : 'text-gray-500'}`}>
-              {mailToggles.selection_submitted?.enabled ? '已啟用' : '已停用'}
-            </span>
-            {mailTogglesSyncing ? (
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="spinner w-4 h-4 border-gray-300"></span>
-                <span>同步中...</span>
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400">變更會自動儲存</span>
-            )}
-          </div>
-        </div>
-
-        {mailTogglesLoading ? (
-          <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
-            <div className="spinner"></div> 載入設定中...
-          </div>
-        ) : mailToggles.selection_submitted?.enabled ? (
-          <div className="space-y-4 transition-all duration-300">
-            <p className="text-sm text-gray-600">
-              當客戶提交或更新影片選擇時，系統會自動發送通知郵件給所有管理員、該批次的上傳者，以及額外設定的收件人。
-            </p>
-            
-            {/* 補發客戶選擇通知 */}
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">補發客戶選擇通知</p>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                <p className="text-sm text-gray-700 mb-3">選擇特定客戶，重新發送其最後一次的影片選擇通知給管理員與上傳者。</p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1">
-                    <Select
-                      value={selectedCustomer}
-                      onChange={(e) => setSelectedCustomer(e.target.value)}
-                      options={[
-                        { value: '', label: '請選擇客戶' },
-                        ...allUsers
-                          .filter(u => u.role === 'customer')
-                          .map((customer) => ({
-                            value: customer.id,
-                            label: `${customer.name} (${customer.email})`
-                          }))
-                      ]}
-                    />
-                  </div>
-                  <button
-                    onClick={handleResendSelectionNotification}
-                    disabled={!selectedCustomer || resendingSelection}
-                    className="btn btn-secondary whitespace-nowrap flex items-center justify-center gap-2"
-                  >
-                    {resendingSelection ? (
-                      <>
-                        <Loader className="h-4 w-4 animate-spin" />
-                        <span>發送中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4" />
-                        <span>補發通知</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-600 mt-2">
-                  💡 將補發該客戶最後一次提交的選擇記錄通知
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="py-10 text-center text-gray-500">
-            <p>客戶提交影片選擇通知目前為停用狀態。</p>
-            <p className="text-sm mt-1">啟用後當客戶提交選擇時會自動發送通知。</p>
-          </div>
-        )}
-      </section>
-
-      {/* 新影片清單上傳通知 */}
-      <section className="card bg-white border-primary-100 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
-              <Send className="h-6 w-6" />
-            </div>
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">新影片清單上傳通知</h2>
-              <p className="text-sm text-gray-500">上傳新清單時自動通知所有客戶與相關人員</p>
-              {!mailToggles.batch_uploaded?.enabled && (
-                <p className="text-xs text-gray-400 mt-1">啟用後所有變更會立即套用，無需手動儲存</p>
-              )}
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => handleToggleMailNotification('batch_uploaded')}
-              disabled={mailTogglesSyncing}
-              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
-                mailToggles.batch_uploaded?.enabled ? 'bg-primary-600' : 'bg-gray-200'
-              } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              <span className="sr-only">啟用上傳通知</span>
-              <span
-                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                  mailToggles.batch_uploaded?.enabled ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </button>
-            <span className={`text-sm font-medium ${mailToggles.batch_uploaded?.enabled ? 'text-primary-700' : 'text-gray-500'}`}>
-              {mailToggles.batch_uploaded?.enabled ? '已啟用' : '已停用'}
-            </span>
-            {mailTogglesSyncing ? (
-              <div className="flex items-center gap-2 text-xs text-gray-500">
-                <span className="spinner w-4 h-4 border-gray-300"></span>
-                <span>同步中...</span>
-              </div>
-            ) : (
-              <span className="text-xs text-gray-400">變更會自動儲存</span>
-            )}
-          </div>
-        </div>
-
-        {mailTogglesLoading ? (
-          <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
-            <div className="spinner"></div> 載入設定中...
-          </div>
-        ) : mailToggles.batch_uploaded?.enabled ? (
-          <div className="space-y-4 transition-all duration-300">
-            <p className="text-sm text-gray-600">
-              當管理員或上傳者上傳新的影片清單時，系統會自動發送通知郵件給所有客戶，以及內部相關人員（管理員、上傳者，排除本次上傳者本人）。
-            </p>
-            
-            {/* 補發上傳通知（批量） */}
-            <div className="border-t border-gray-100 pt-4">
-              <p className="text-sm font-medium text-gray-700 mb-3">補發上傳通知（批量）</p>
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
-                <p className="text-sm text-gray-700 mb-3">選擇批次，重新發送上傳通知給所有客戶與相關人員。</p>
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <div className="flex-1">
-                    <Select
-                      value={selectedBatchForResend}
-                      onChange={(e) => setSelectedBatchForResend(e.target.value)}
-                      options={[
-                        { value: '', label: '請選擇批次' },
-                        ...batches.map((batch) => ({
-                          value: batch.id,
-                          label: `${batch.name} (${new Date(batch.created_at).toLocaleDateString('zh-TW')})`
-                        }))
-                      ]}
-                    />
-                  </div>
-                  <button
-                    onClick={handleResendBatchUploadNotification}
-                    disabled={!selectedBatchForResend || resendingBatch}
-                    className="btn btn-secondary whitespace-nowrap flex items-center justify-center gap-2"
-                  >
-                    {resendingBatch ? (
-                      <>
-                        <Loader className="h-4 w-4 animate-spin" />
-                        <span>發送中...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="h-4 w-4" />
-                        <span>補發通知</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-                <p className="text-xs text-gray-600 mt-2">
-                  💡 將通知所有客戶與內部人員（管理員、上傳者）
-                </p>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="py-10 text-center text-gray-500">
-            <p>新影片清單上傳通知目前為停用狀態。</p>
-            <p className="text-sm mt-1">啟用後當上傳新清單時會自動發送通知。</p>
-          </div>
-        )}
-      </section>
-
       {/* 每月提醒設定 */}
       <section className="card bg-white border-primary-100 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
@@ -1082,152 +866,281 @@ export default function MailManagement() {
         </div>
       ) : (
         groupedRules.map((event) => (
-          <section key={event.value} className="card space-y-4">
-            <div className="flex flex-col gap-2">
+          <section key={event.value} className="card bg-white border-primary-100 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 pb-4">
               <div className="flex items-center gap-3">
-                <Mail className="h-5 w-5 text-primary-600" />
+                <div className={`p-2 rounded-lg ${
+                  event.value === 'selection_submitted' ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'
+                }`}>
+                  <Mail className="h-6 w-6" />
+                </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">{event.label}</h2>
                   <p className="text-sm text-gray-500">{event.description}</p>
-                </div>
-              </div>
-              {event.value === 'selection_submitted' && (
-                <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
-                  <ShieldCheck className="h-4 w-4" />
-                  系統預設會通知：所有系統管理員（依使用者資料）與該批次的上傳者，您可以另外加上其他收件人。
-                </div>
-              )}
-              {event.value === 'batch_uploaded' && (
-                <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                  <ShieldCheck className="h-4 w-4" />
-                  預設會通知所有管理員與上傳者（排除本次上傳者本人）。客戶會收到另一封「新的影片清單已上傳」通知，無需重複設定。
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <div className="bg-white border border-dashed border-primary-200 rounded-xl px-4 py-3">
-                <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                  <Info className="h-4 w-4 text-primary-600" />
-                  預設通知對象
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {(defaultRecipients[event.value] || []).map((recipient) => (
-                    <span
-                      key={recipient.id || recipient.email || recipient.name}
-                      className="inline-flex items-center rounded-full bg-primary-50 text-primary-700 px-3 py-1 text-xs"
-                    >
-                      {recipient.name}
-                      {recipient.email && <span className="text-gray-500 ml-1">（{recipient.email}）</span>}
-                      {recipient.description && (
-                        <span className="text-gray-500 ml-1 text-[11px]">{recipient.description}</span>
-                      )}
-                    </span>
-                  ))}
-                  {(defaultRecipients[event.value] || []).length === 0 && (
-                    <span className="text-xs text-gray-500">尚未設定預設通知對象</span>
+                  {!mailToggles[event.value]?.enabled && (
+                    <p className="text-xs text-gray-400 mt-1">啟用後所有變更會立即套用，無需手動儲存</p>
                   )}
                 </div>
               </div>
-
-              {event.recipients.length === 0 && (
-                <p className="text-sm text-gray-500">目前尚未設定額外收件人。</p>
-              )}
-              {event.recipients.map((rule) => (
-                <div
-                  key={rule.id}
-                  className="flex items-center justify-between rounded-xl border border-gray-100 bg-primary-50/50 px-4 py-3"
+              
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleToggleMailNotification(event.value)}
+                  disabled={mailTogglesSyncing}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    mailToggles[event.value]?.enabled ? 'bg-primary-600' : 'bg-gray-200'
+                  } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
+                  <span className="sr-only">啟用{event.label}</span>
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      mailToggles[event.value]?.enabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+                <span className={`text-sm font-medium ${mailToggles[event.value]?.enabled ? 'text-primary-700' : 'text-gray-500'}`}>
+                  {mailToggles[event.value]?.enabled ? '已啟用' : '已停用'}
+                </span>
+                {mailTogglesSyncing ? (
+                  <div className="flex items-center gap-2 text-xs text-gray-500">
+                    <span className="spinner w-4 h-4 border-gray-300"></span>
+                    <span>同步中...</span>
+                  </div>
+                ) : (
+                  <span className="text-xs text-gray-400">變更會自動儲存</span>
+                )}
+              </div>
+            </div>
+
+            {mailTogglesLoading ? (
+              <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
+                <div className="spinner"></div> 載入設定中...
+              </div>
+            ) : !mailToggles[event.value]?.enabled ? (
+              <div className="py-10 text-center text-gray-500">
+                <p>{event.label}通知目前為停用狀態。</p>
+                <p className="text-sm mt-1">啟用後自動發送通知，您也可以在下方設定額外收件人。</p>
+              </div>
+            ) : (
+              <div className="space-y-6 transition-all duration-300">
+                {/* 系統預設通知說明 */}
+                {event.value === 'selection_submitted' && (
+                  <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    系統預設會通知：所有系統管理員（依使用者資料）與該批次的上傳者，您可以另外加上其他收件人。
+                  </div>
+                )}
+                {event.value === 'batch_uploaded' && (
+                  <div className="flex items-center gap-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                    <ShieldCheck className="h-4 w-4" />
+                    預設會通知所有管理員與上傳者（排除本次上傳者本人）。客戶會收到另一封「新的影片清單已上傳」通知，無需重複設定。
+                  </div>
+                )}
+
+                {/* 預設通知對象 */}
+                <div className="bg-white border border-dashed border-primary-200 rounded-xl px-4 py-3">
+                  <p className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <Info className="h-4 w-4 text-primary-600" />
+                    預設通知對象
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {(defaultRecipients[event.value] || []).map((recipient) => (
+                      <span
+                        key={recipient.id || recipient.email || recipient.name}
+                        className="inline-flex items-center rounded-full bg-primary-50 text-primary-700 px-3 py-1 text-xs"
+                      >
+                        {recipient.name}
+                        {recipient.email && <span className="text-gray-500 ml-1">（{recipient.email}）</span>}
+                        {recipient.description && (
+                          <span className="text-gray-500 ml-1 text-[11px]">{recipient.description}</span>
+                        )}
+                      </span>
+                    ))}
+                    {(defaultRecipients[event.value] || []).length === 0 && (
+                      <span className="text-xs text-gray-500">尚未設定預設通知對象</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* 額外收件人列表 */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">額外收件人</p>
+                  {event.recipients.length === 0 ? (
+                    <p className="text-sm text-gray-500">目前尚未設定額外收件人。</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {event.recipients.map((rule) => (
+                        <div
+                          key={rule.id}
+                          className="flex items-center justify-between rounded-xl border border-gray-100 bg-primary-50/50 px-4 py-3"
+                        >
+                          <div>
+                            <p className="font-medium text-gray-900">{rule.recipient_name || '未命名'}</p>
+                            <p className="text-sm text-gray-600">{rule.recipient_email}</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPendingDelete(rule)}
+                            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+                            title="移除收件人"
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 新增額外收件人 */}
+                <div className="border-t border-gray-100 pt-4 space-y-4">
                   <div>
-                    <p className="font-medium text-gray-900">{rule.recipient_name || '未命名'}</p>
-                    <p className="text-sm text-gray-600">{rule.recipient_email}</p>
+                    <p className="text-sm font-medium text-gray-700 mb-3">從系統使用者加入</p>
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <div className="flex-1">
+                        <Select
+                          value={userSelectState[event.value]}
+                          onChange={(e) =>
+                            setUserSelectState((prev) => ({
+                              ...prev,
+                              [event.value]: e.target.value,
+                            }))
+                          }
+                          options={[
+                            { value: '', label: '選擇使用者' },
+                            ...availableUsers.map((staff) => ({
+                              value: staff.id,
+                              label: `${staff.name}（${staff.email}）`
+                            }))
+                          ]}
+                          placeholder="選擇使用者"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="btn btn-secondary flex items-center justify-center gap-2 whitespace-nowrap"
+                        onClick={() => handleAddRecipientFromUser(event.value)}
+                        disabled={submitting}
+                      >
+                        <Plus className="h-4 w-4" />
+                        加入使用者
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setPendingDelete(rule)}
-                    className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-                    title="移除收件人"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-                </div>
-              ))}
-            </div>
 
-            <div className="border-t border-gray-100 pt-4 space-y-4">
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-3">從系統使用者加入</p>
-                <div className="flex flex-col md:flex-row gap-3">
-                  <div className="flex-1">
-                    <Select
-                      value={userSelectState[event.value]}
-                      onChange={(e) =>
-                        setUserSelectState((prev) => ({
-                          ...prev,
-                          [event.value]: e.target.value,
-                        }))
-                      }
-                      options={[
-                        { value: '', label: '選擇使用者' },
-                        ...availableUsers.map((staff) => ({
-                          value: staff.id,
-                          label: `${staff.name}（${staff.email}）`
-                        }))
-                      ]}
-                      placeholder="選擇使用者"
-                    />
+                  <div>
+                    <p className="text-sm font-medium text-gray-700 mb-3">手動輸入 Email</p>
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <input
+                        type="text"
+                        className="input flex-1"
+                        placeholder="顯示名稱（選填）"
+                        value={formState[event.value].name}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            [event.value]: { ...prev[event.value], name: e.target.value },
+                          }))
+                        }
+                      />
+                      <input
+                        type="email"
+                        className="input flex-1"
+                        placeholder="收件人 Email"
+                        value={formState[event.value].email}
+                        onChange={(e) =>
+                          setFormState((prev) => ({
+                            ...prev,
+                            [event.value]: { ...prev[event.value], email: e.target.value },
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-primary flex items-center justify-center gap-2 whitespace-nowrap"
+                        onClick={() => handleAddRecipient(event.value)}
+                        disabled={submitting}
+                      >
+                        <Plus className="h-4 w-4" />
+                        新增
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-secondary flex items-center justify-center gap-2 whitespace-nowrap"
-                    onClick={() => handleAddRecipientFromUser(event.value)}
-                    disabled={submitting}
-                  >
-                    <Plus className="h-4 w-4" />
-                    加入使用者
-                  </button>
+                </div>
+
+                {/* 補發通知功能 */}
+                <div className="border-t border-gray-100 pt-4">
+                  <p className="text-sm font-medium text-gray-700 mb-3">
+                    {event.value === 'selection_submitted' ? '補發客戶選擇通知' : '補發上傳通知（批量）'}
+                  </p>
+                  <div className="bg-blue-50 border border-blue-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-700 mb-3">
+                      {event.value === 'selection_submitted' 
+                        ? '選擇特定客戶，重新發送其最後一次的影片選擇通知給管理員與上傳者。'
+                        : '選擇批次，重新發送上傳通知給所有客戶與相關人員。'}
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <div className="flex-1">
+                        {event.value === 'selection_submitted' ? (
+                          <Select
+                            value={selectedCustomer}
+                            onChange={(e) => setSelectedCustomer(e.target.value)}
+                            options={[
+                              { value: '', label: '請選擇客戶' },
+                              ...allUsers
+                                .filter(u => u.role === 'customer')
+                                .map((customer) => ({
+                                  value: customer.id,
+                                  label: `${customer.name} (${customer.email})`
+                                }))
+                            ]}
+                          />
+                        ) : (
+                          <Select
+                            value={selectedBatchForResend}
+                            onChange={(e) => setSelectedBatchForResend(e.target.value)}
+                            options={[
+                              { value: '', label: '請選擇批次' },
+                              ...batches.map((batch) => ({
+                                value: batch.id,
+                                label: `${batch.name} (${new Date(batch.created_at).toLocaleDateString('zh-TW')})`
+                              }))
+                            ]}
+                          />
+                        )}
+                      </div>
+                      <button
+                        onClick={() => event.value === 'selection_submitted' ? handleResendSelectionNotification() : handleResendBatchUploadNotification()}
+                        disabled={
+                          (event.value === 'selection_submitted' && (!selectedCustomer || resendingSelection)) ||
+                          (event.value === 'batch_uploaded' && (!selectedBatchForResend || resendingBatch))
+                        }
+                        className="btn btn-secondary whitespace-nowrap flex items-center justify-center gap-2"
+                      >
+                        {((event.value === 'selection_submitted' && resendingSelection) || 
+                          (event.value === 'batch_uploaded' && resendingBatch)) ? (
+                          <>
+                            <Loader className="h-4 w-4 animate-spin" />
+                            <span>發送中...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4" />
+                            <span>補發通知</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-600 mt-2">
+                      💡 {event.value === 'selection_submitted' 
+                        ? '將補發該客戶最後一次提交的選擇記錄通知'
+                        : '將通知所有客戶與內部人員（管理員、上傳者）'}
+                    </p>
+                  </div>
                 </div>
               </div>
-
-              <div>
-                <p className="text-sm font-medium text-gray-700 mb-3">手動輸入 Email</p>
-                <div className="flex flex-col md:flex-row gap-3">
-                  <input
-                    type="text"
-                    className="input flex-1"
-                    placeholder="顯示名稱（選填）"
-                    value={formState[event.value].name}
-                    onChange={(e) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        [event.value]: { ...prev[event.value], name: e.target.value },
-                      }))
-                    }
-                  />
-                  <input
-                    type="email"
-                    className="input flex-1"
-                    placeholder="收件人 Email"
-                    value={formState[event.value].email}
-                    onChange={(e) =>
-                      setFormState((prev) => ({
-                        ...prev,
-                        [event.value]: { ...prev[event.value], email: e.target.value },
-                      }))
-                    }
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-primary flex items-center justify-center gap-2 whitespace-nowrap"
-                    onClick={() => handleAddRecipient(event.value)}
-                    disabled={submitting}
-                  >
-                    <Plus className="h-4 w-4" />
-                    新增
-                  </button>
-                </div>
-              </div>
-            </div>
+            )}
           </section>
         ))
       )}

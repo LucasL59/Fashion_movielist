@@ -1,6 +1,6 @@
 # 每月影片選擇系統 (Monthly Movie Selection System)
 
-> **版本**：v3.0.2 ｜ **最後更新**：2026-01-03 ｜ **狀態**：✅ 可部署、可測試
+> **版本**：v3.0.3 ｜ **最後更新**：2026-01-03 ｜ **狀態**：✅ 可部署、可測試
 
 ## 🔰 專案簡介
 
@@ -40,6 +40,24 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 ## 🆕 2026-01-03 更新重點
 
 > 完整說明請見相關技術文檔
+
+### v3.0.3 跨月份選擇同步修正 🔧
+
+- **🎯 核心問題修正**：
+  - 修正同一影片在不同月份有不同 ID 導致無法識別的問題
+  - 改用影片標題 (`title`) 作為唯一識別，實現真正的跨月份選擇同步
+  - 新增 `customerListTitles` 和 `pendingChangesTitles` 狀態管理
+  
+- **📧 郵件通知優化**：
+  - 重構郵件服務，直接使用前端處理好的新增/移除清單
+  - 移除後端複雜的 `video.id` 差異計算邏輯
+  - 郵件模板改為分別顯示「新增影片」和「移除影片」清單
+  - 確保郵件中不會出現重複影片
+  
+- **🔄 資料流程優化**：
+  - 前端使用標題去重後再提交給後端
+  - LocalStorage 同時保存 ID 和標題集合
+  - 提交確認彈窗正確顯示所有選擇（無重複）
 
 ### v3.0.2 跨月份選擇體驗優化
 
@@ -101,6 +119,7 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 
 ### 參考文檔
 
+- [CROSS_MONTH_SELECTION_FIX.md](CROSS_MONTH_SELECTION_FIX.md) - 跨月份選擇同步修正 ⭐ v3.0.3
 - [REFACTOR_V3_DEPLOYMENT_GUIDE.md](REFACTOR_V3_DEPLOYMENT_GUIDE.md) - v3 重構部署指南
 - [CRITICAL_BUG_FIX.md](CRITICAL_BUG_FIX.md) - 關鍵錯誤修正
 - [UI_UX_OPTIMIZATION_SUMMARY.md](UI_UX_OPTIMIZATION_SUMMARY.md) - UI/UX 優化總結
