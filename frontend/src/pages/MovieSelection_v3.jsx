@@ -401,9 +401,9 @@ export default function MovieSelection() {
         </div>
       </div>
       
-      {/* 待處理變更摘要 - 懸浮在底部 */}
-      {hasPendingChanges && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-2xl w-full mx-4">
+      {/* 待處理變更摘要 - 使用 Portal 懸浮在視窗底部 */}
+      {hasPendingChanges && createPortal(
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 max-w-2xl w-full px-4">
           <div className="bg-white/95 backdrop-blur-xl border-2 border-primary-300 rounded-2xl shadow-2xl p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
@@ -450,7 +450,8 @@ export default function MovieSelection() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
       
       {/* 我的影片清單（折疊式） */}
