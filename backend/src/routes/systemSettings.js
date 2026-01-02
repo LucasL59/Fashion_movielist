@@ -5,6 +5,7 @@ import { recordOperationLog } from '../services/operationLogService.js'
 
 const router = express.Router()
 const OPERATION_LOGS_KEY = 'operation_logs'
+const MAIL_NOTIFICATIONS_KEY = 'mail_notifications'
 const DEFAULT_RETENTION_DAYS = 90
 const MIN_RETENTION_DAYS = 7
 const MAX_RETENTION_DAYS = 365
@@ -170,6 +171,143 @@ router.put('/operation-logs', requireAuth, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error('更新操作紀錄保留天數失敗:', error)
     res.status(500).json({ error: 'SystemSettingsError', message: error.message || '無法更新設定' })
+  }
+})
+
+/**
+ * GET /api/system-settings/mail-notifications
+ * 取得郵件通知開關設定
+ */
+router.get('/mail-notifications', requireAuth, requireAdmin, async (_req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value, updated_at, updated_by')
+      .eq('key', MAIL_NOTIFICATIONS_KEY)
+      .maybeSingle()
+
+    if (error) {
+      if (isMissingSettingsTableError(error)) {
+        // 表不存在時返回預設值
+        return res.json({
+          success: true,
+          data: {
+            selection_submitted: { enabled: true },
+            batch_uploaded: { enabled: true },
+          },
+        })
+      }
+      throw error
+    }
+
+    // 如果沒有資料，返回預設值
+    if (!data) {
+      return res.json({
+        success: true,
+        data: {
+          selection_submitted: { enabled: true },
+          batch_uploaded: { enabled: true },
+        },
+      })
+    }
+
+    res.json({
+      success: true,
+      data: data.value || {
+        selection_submitted: { enabled: true },
+        batch_uploaded: { enabled: true },
+      },
+      updatedAt: data.updated_at,
+      updatedBy: data.updated_by,
+    })
+  } catch (error) {
+    console.error('取得郵件通知設定失敗:', error)
+    res.status(500).json({
+      error: 'SystemSettingsError',
+      message: error.message || '無法取得郵件通知設定',
+    })
+  }
+})
+
+/**
+ * PUT /api/system-settings/mail-notifications
+ * 更新郵件通知開關設定
+ */
+router.put('/mail-notifications', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { selection_submitted, batch_uploaded } = req.body || {}
+
+    // 驗證參數
+    if (typeof selection_submitted?.enabled !== 'boolean' || typeof batch_uploaded?.enabled !== 'boolean') {
+      return res.status(400).json({
+        error: 'ValidationError',
+        message: '請提供有效的開關設定（enabled 需為布林值）',
+      })
+    }
+
+    const payload = {
+      key: MAIL_NOTIFICATIONS_KEY,
+      value: {
+        selection_submitted: { enabled: selection_submitted.enabled },
+        batch_uploaded: { enabled: batch_uploaded.enabled },
+      },
+      updated_at: new Date().toISOString(),
+      updated_by: req.authUser?.id || req.authUserProfile?.id || null,
+    }
+
+    const { data, error } = await supabase
+      .from('system_settings')
+      .upsert(payload, { onConflict: 'key' })
+      .select('*')
+      .single()
+
+    if (error) {
+      if (isMissingSettingsTableError(error)) {
+        console.warn('system_settings 表不存在，無法儲存設定')
+        return res.status(500).json({
+          error: 'SystemSettingsError',
+          message: 'system_settings 表不存在，請先執行資料庫遷移腳本',
+        })
+      }
+      throw error
+    }
+
+    // 記錄操作
+    const changes = []
+    if (selection_submitted.enabled) {
+      changes.push('啟用客戶提交影片選擇通知')
+    } else {
+      changes.push('停用客戶提交影片選擇通知')
+    }
+    if (batch_uploaded.enabled) {
+      changes.push('啟用新影片清單上傳通知')
+    } else {
+      changes.push('停用新影片清單上傳通知')
+    }
+
+    await recordOperationLog({
+      req,
+      action: 'settings.mail_notifications',
+      resourceType: 'system_settings',
+      resourceId: MAIL_NOTIFICATIONS_KEY,
+      description: `更新郵件通知設定：${changes.join('、')}`,
+      metadata: {
+        selection_submitted: selection_submitted.enabled,
+        batch_uploaded: batch_uploaded.enabled,
+      },
+    })
+
+    res.json({
+      success: true,
+      message: '郵件通知設定已更新',
+      data: data.value,
+    })
+  } catch (error) {
+    console.error('更新郵件通知設定失敗:', error)
+    res.status(500).json({
+      error: 'SystemSettingsError',
+      message: error.message || '無法更新郵件通知設定',
+    })
   }
 })
 

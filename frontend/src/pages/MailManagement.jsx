@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Plus, Trash2, Mail, ShieldCheck, Info, AlertTriangle, Clock, Calendar, X, Send, User, Loader } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
-import { createMailRule, deleteMailRule, getMailRules, getReminderSettings, setReminderSchedule, getBatches } from '../lib/api'
+import { createMailRule, deleteMailRule, getMailRules, getReminderSettings, setReminderSchedule, getBatches, getMailNotificationSettings, setMailNotificationSettings } from '../lib/api'
 import Select from '../components/Select'
 import Modal from '../components/Modal'
 import { useToast } from '../contexts/ToastContext'
@@ -48,6 +48,14 @@ export default function MailManagement() {
     selection_submitted: [],
     batch_uploaded: [],
   })
+  
+  // 郵件通知開關狀態
+  const [mailToggles, setMailToggles] = useState({
+    selection_submitted: { enabled: true },
+    batch_uploaded: { enabled: true },
+  })
+  const [mailTogglesLoading, setMailTogglesLoading] = useState(false)
+  const [mailTogglesSyncing, setMailTogglesSyncing] = useState(false)
 
   // 提醒設定 State
   const [reminderConfig, setReminderConfig] = useState({
@@ -85,6 +93,7 @@ export default function MailManagement() {
     loadMailRules()
     loadReminderSettings()
     loadUsersAndBatches()
+    loadMailNotificationToggles()
   }, [])
   
   async function loadUsersAndBatches() {
@@ -114,6 +123,56 @@ export default function MailManagement() {
       showToast('載入資料失敗', 'error')
     } finally {
       setLoadingUsers(false)
+    }
+  }
+  
+  // 載入郵件通知開關設定
+  async function loadMailNotificationToggles() {
+    try {
+      setMailTogglesLoading(true)
+      const response = await getMailNotificationSettings()
+      const settings = response.data || {}
+      
+      setMailToggles({
+        selection_submitted: settings.selection_submitted || { enabled: true },
+        batch_uploaded: settings.batch_uploaded || { enabled: true },
+      })
+    } catch (error) {
+      console.error('載入郵件通知開關失敗:', error)
+      // 載入失敗時使用預設值（都啟用）
+      setMailToggles({
+        selection_submitted: { enabled: true },
+        batch_uploaded: { enabled: true },
+      })
+    } finally {
+      setMailTogglesLoading(false)
+    }
+  }
+  
+  // 切換郵件通知開關
+  async function handleToggleMailNotification(eventType) {
+    if (mailTogglesSyncing) return
+    
+    const currentEnabled = mailToggles[eventType]?.enabled
+    const newToggles = {
+      ...mailToggles,
+      [eventType]: { enabled: !currentEnabled }
+    }
+    
+    setMailToggles(newToggles)
+    setMailTogglesSyncing(true)
+    
+    try {
+      await setMailNotificationSettings(newToggles)
+      const eventLabel = eventType === 'selection_submitted' ? '客戶提交影片選擇' : '新影片清單上傳'
+      showToast(`${eventLabel}通知已${!currentEnabled ? '啟用' : '停用'}`, 'success')
+    } catch (error) {
+      console.error('更新郵件通知開關失敗:', error)
+      // 恢復原狀態
+      setMailToggles(mailToggles)
+      showToast('更新失敗，請稍後再試', 'error')
+    } finally {
+      setMailTogglesSyncing(false)
     }
   }
 
@@ -446,6 +505,106 @@ export default function MailManagement() {
           設定不同事件的通知對象，確保所有關係人都能即時收到訊息。
         </p>
       </div>
+
+      {/* 郵件通知全局開關 */}
+      <section className="card bg-gradient-to-br from-primary-50 to-amber-50 border-primary-100 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-primary-100 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-primary-100 text-primary-600 rounded-lg">
+              <Mail className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">郵件通知開關</h2>
+              <p className="text-sm text-gray-500">控制自動郵件通知功能的啟用或停用</p>
+            </div>
+          </div>
+        </div>
+
+        {mailTogglesLoading ? (
+          <div className="py-8 text-center text-gray-500 flex items-center justify-center gap-2">
+            <div className="spinner"></div> 載入設定中...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {/* 客戶提交影片選擇開關 */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-xl px-4 py-4 border border-primary-100">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="text-base font-semibold text-gray-900 mb-1">客戶提交影片選擇通知</h3>
+                  <p className="text-sm text-gray-600">
+                    當客戶提交影片選擇時，自動發送通知給管理員和上傳者
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 ml-4">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMailNotification('selection_submitted')}
+                    disabled={mailTogglesSyncing}
+                    className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                      mailToggles.selection_submitted?.enabled ? 'bg-primary-600' : 'bg-gray-200'
+                    } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span className="sr-only">啟用客戶提交通知</span>
+                    <span
+                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        mailToggles.selection_submitted?.enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                  <span className={`text-sm font-medium whitespace-nowrap ${
+                    mailToggles.selection_submitted?.enabled ? 'text-primary-700' : 'text-gray-500'
+                  }`}>
+                    {mailToggles.selection_submitted?.enabled ? '已啟用' : '已停用'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 新影片清單上傳開關 */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-xl px-4 py-4 border border-primary-100">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <h3 className="text-base font-semibold text-gray-900 mb-1">新影片清單上傳通知</h3>
+                  <p className="text-sm text-gray-600">
+                    當新的影片清單上傳時，自動發送通知給所有客戶和相關人員
+                  </p>
+                </div>
+                <div className="flex items-center gap-3 ml-4">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMailNotification('batch_uploaded')}
+                    disabled={mailTogglesSyncing}
+                    className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 ${
+                      mailToggles.batch_uploaded?.enabled ? 'bg-primary-600' : 'bg-gray-200'
+                    } ${mailTogglesSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span className="sr-only">啟用上傳通知</span>
+                    <span
+                      className={`pointer-events-none inline-block h-6 w-6 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        mailToggles.batch_uploaded?.enabled ? 'translate-x-5' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                  <span className={`text-sm font-medium whitespace-nowrap ${
+                    mailToggles.batch_uploaded?.enabled ? 'text-primary-700' : 'text-gray-500'
+                  }`}>
+                    {mailToggles.batch_uploaded?.enabled ? '已啟用' : '已停用'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 提示訊息 */}
+            <div className="flex items-start gap-2 text-xs text-gray-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+              <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-blue-900 mb-1">💡 功能說明</p>
+                <p>停用後，系統將不會發送對應的自動郵件通知。您仍可透過「補發通知」功能手動發送郵件。</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
 
       {/* 每月提醒設定 */}
       <section className="card bg-white border-primary-100 shadow-sm">

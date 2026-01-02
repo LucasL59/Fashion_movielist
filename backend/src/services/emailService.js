@@ -12,6 +12,37 @@ const MAIL_EVENT_TYPES = {
   BATCH_UPLOADED: 'batch_uploaded',
 };
 
+/**
+ * 檢查郵件通知是否啟用
+ * @param {string} eventType - 事件類型
+ * @returns {Promise<boolean>} - 是否啟用
+ */
+async function isMailNotificationEnabled(eventType) {
+  try {
+    const { data, error } = await supabase
+      .from('system_settings')
+      .select('value')
+      .eq('key', 'mail_notifications')
+      .maybeSingle();
+
+    if (error) {
+      console.warn('讀取郵件通知設定失敗，預設為啟用:', error.message);
+      return true; // 預設啟用
+    }
+
+    if (!data || !data.value) {
+      console.warn('找不到郵件通知設定，預設為啟用');
+      return true; // 預設啟用
+    }
+
+    const eventSettings = data.value[eventType];
+    return eventSettings?.enabled !== false; // 只有明確設為 false 才停用
+  } catch (error) {
+    console.error('檢查郵件通知設定時發生錯誤:', error);
+    return true; // 發生錯誤時預設啟用，避免影響正常功能
+  }
+}
+
 async function getMailRecipientsByEvent(eventType) {
   try {
     const { data, error } = await supabase
@@ -217,6 +248,12 @@ function mergeRecipients(...lists) {
  */
 export async function notifyCustomersNewList(batchId, batchName = null) {
   try {
+    // 檢查郵件通知是否啟用
+    const isEnabled = await isMailNotificationEnabled(MAIL_EVENT_TYPES.BATCH_UPLOADED);
+    if (!isEnabled) {
+      console.log('📧 新影片清單上傳通知已停用，跳過發送');
+      return { customersSent: 0, internalSent: 0, totalSent: 0, disabled: true };
+    }
     // 查詢批次資訊（包含上傳者）
     const { data: batch, error: batchError } = await supabase
       .from('batches')
@@ -400,6 +437,12 @@ export async function notifyCustomersNewList(batchId, batchName = null) {
  */
 export async function notifyAdminCustomerSelection({ customerName, customerEmail, batchId, videos, previousVideos = [], previousVideoIds = [] }) {
   try {
+    // 檢查郵件通知是否啟用
+    const isEnabled = await isMailNotificationEnabled(MAIL_EVENT_TYPES.SELECTION_SUBMITTED);
+    if (!isEnabled) {
+      console.log('📧 客戶提交影片選擇通知已停用，跳過發送');
+      return { disabled: true };
+    }
     // 查詢批次資訊
     const { data: batch } = await supabase
       .from('batches')

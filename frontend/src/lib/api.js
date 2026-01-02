@@ -355,6 +355,22 @@ export async function sendReminderNow(data) {
   return response.data
 }
 
+/**
+ * 獲取郵件通知開關設定
+ */
+export async function getMailNotificationSettings() {
+  const response = await api.get('/api/system-settings/mail-notifications')
+  return response.data
+}
+
+/**
+ * 更新郵件通知開關設定
+ */
+export async function setMailNotificationSettings(data) {
+  const response = await api.put('/api/system-settings/mail-notifications', data)
+  return response.data
+}
+
 export async function registerAccount(data) {
   const response = await api.post('/api/auth/register', data)
   return response.data
