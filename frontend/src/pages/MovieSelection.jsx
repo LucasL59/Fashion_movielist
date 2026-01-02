@@ -147,6 +147,14 @@ export default function MovieSelection() {
       setLoadingCustomerList(true)
       const response = await getCustomerList(user.id)
       
+      // 確保 response 和 response.data 存在
+      if (!response || typeof response !== 'object') {
+        console.error('⚠️ getCustomerList 返回了無效的響應:', response)
+        setCustomerList([])
+        setCustomerVideoIds(new Set())
+        return
+      }
+
       if (response.success && response.data && Array.isArray(response.data)) {
         setCustomerList(response.data)
         const videoIds = new Set(response.data.map(v => v.id))
@@ -156,7 +164,7 @@ export default function MovieSelection() {
         // 沒有資料或格式不正確，初始化為空陣列
         setCustomerList([])
         setCustomerVideoIds(new Set())
-        console.log('ℹ️ 客戶尚未建立清單')
+        console.log('ℹ️ 客戶尚未建立清單（響應格式不符或無數據）')
       }
     } catch (error) {
       console.error('❌ 載入客戶清單失敗:', error)
