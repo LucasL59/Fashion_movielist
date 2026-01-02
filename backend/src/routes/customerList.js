@@ -73,13 +73,15 @@ router.get('/:customerId', requireAuth, async (req, res) => {
       throw error;
     }
 
-    // 將嵌套的 videos 資料攤平
-    const formattedList = customerList.map(item => ({
-      ...item.videos,
-      added_from_month: item.added_from_month,
-      added_at: item.added_at,
-      list_item_id: item.id
-    }));
+    // 將嵌套的 videos 資料攤平，過濾掉 videos 為 null 的項目
+    const formattedList = (customerList || [])
+      .filter(item => item.videos) // 過濾掉已刪除的影片
+      .map(item => ({
+        ...item.videos,
+        added_from_month: item.added_from_month,
+        added_at: item.added_at,
+        list_item_id: item.id
+      }));
 
     console.log(`✅ [customer-list] 找到 ${formattedList.length} 筆記錄`);
 
@@ -112,10 +114,14 @@ router.get('/:customerId', requireAuth, async (req, res) => {
 router.post('/:customerId/update', requireAuth, async (req, res) => {
   try {
     const { customerId } = req.params;
-    const { addVideoIds = [], removeVideoIds = [], month } = req.body;
+    let { addVideoIds = [], removeVideoIds = [], month } = req.body;
     const authProfile = req.authUserProfile;
     const authUser = req.authUser;
     const userId = authProfile?.id || authUser?.id;
+
+    // 確保是陣列
+    addVideoIds = Array.isArray(addVideoIds) ? addVideoIds : [];
+    removeVideoIds = Array.isArray(removeVideoIds) ? removeVideoIds : [];
 
     console.log(`📝 [customer-list] 更新客戶清單: ${customerId}`);
     console.log(`   - 新增: ${addVideoIds.length} 部`);
@@ -236,7 +242,7 @@ router.post('/:customerId/submit', requireAuth, async (req, res) => {
 
     if (listError) throw listError;
 
-    const videoIds = currentList.map(item => item.video_id);
+    const videoIds = (currentList || []).map(item => item.video_id);
 
     // 記錄歷史快照
     const { error: historyError } = await supabase

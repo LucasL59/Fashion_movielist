@@ -73,8 +73,11 @@ export default function MovieSelection() {
 
   // 計算差異用於顯示
   const changesForDisplay = useMemo(() => {
-    const addedVideos = (monthlyVideos || []).filter(v => pendingChanges.add.has(v.id))
-    const removedVideos = (customerList || []).filter(v => pendingChanges.remove.has(v.id))
+    const safeMonthlyVideos = Array.isArray(monthlyVideos) ? monthlyVideos : []
+    const safeCustomerList = Array.isArray(customerList) ? customerList : []
+    
+    const addedVideos = safeMonthlyVideos.filter(v => pendingChanges.add.has(v.id))
+    const removedVideos = safeCustomerList.filter(v => pendingChanges.remove.has(v.id))
     
     return {
       added: addedVideos,
@@ -178,11 +181,12 @@ export default function MovieSelection() {
       
       if (response.success) {
         setBatch(response.data.batch)
-        setMonthlyVideos(response.data.videos || [])
+        const videos = response.data.videos || []
+        setMonthlyVideos(videos)
         setCurrentPage(1)
         setShowAllPages(false)
         
-        console.log(`✅ 已載入 ${response.data.videos.length} 部影片`)
+        console.log(`✅ 已載入 ${videos.length} 部影片`)
       }
     } catch (error) {
       console.error('❌ 載入影片失敗:', error)
@@ -311,7 +315,7 @@ export default function MovieSelection() {
       <BrandTransition isVisible={loading} />
       
       {/* 客戶累積清單區塊 */}
-      {customerList.length > 0 && (
+      {Array.isArray(customerList) && customerList.length > 0 && (
         <div className="glass-panel rounded-2xl p-6 border-2 border-blue-200/50">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
@@ -353,7 +357,7 @@ export default function MovieSelection() {
           
           {ownedViewMode === 'grid' ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              {customerList.map((video) => {
+              {(customerList || []).map((video) => {
                 const isSelected = currentSelectedIds.has(video.id)
                 const isPendingRemove = pendingChanges.remove.has(video.id)
                 
@@ -403,7 +407,7 @@ export default function MovieSelection() {
             </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {customerList.map((video) => {
+              {(customerList || []).map((video) => {
                 const isSelected = currentSelectedIds.has(video.id)
                 const isPendingRemove = pendingChanges.remove.has(video.id)
                 
@@ -476,7 +480,7 @@ export default function MovieSelection() {
             <div>
               <h2 className="text-2xl font-bold text-gray-900">{batch.name}</h2>
               <p className="text-gray-500 mt-1">
-                共 {monthlyVideos.length} 部影片 · 已選擇 {currentSelectedIds.size} 部
+                共 {(monthlyVideos || []).length} 部影片 · 已選擇 {currentSelectedIds.size} 部
               </p>
             </div>
             
