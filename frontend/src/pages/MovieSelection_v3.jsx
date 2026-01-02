@@ -43,6 +43,9 @@ export default function MovieSelection() {
   const [monthlyVideos, setMonthlyVideos] = useState([])
   const [loadingVideos, setLoadingVideos] = useState(false)
   
+  // 所有月份的影片（用於跨月份查找）
+  const [allMonthsVideos, setAllMonthsVideos] = useState({})
+  
   // 客戶當前清單
   const [customerList, setCustomerList] = useState([])
   const [customerListIds, setCustomerListIds] = useState(new Set())
@@ -141,7 +144,14 @@ export default function MovieSelection() {
       
       if (response.success && response.data) {
         setCurrentBatch(response.data.batch)
-        setMonthlyVideos(response.data.videos || [])
+        const videos = response.data.videos || []
+        setMonthlyVideos(videos)
+        
+        // 儲存到所有月份的影片集合中
+        setAllMonthsVideos(prev => ({
+          ...prev,
+          [month]: videos
+        }))
         
         console.log(`✅ 已載入 ${response.data.videos?.length || 0} 部影片`)
       }
@@ -256,8 +266,15 @@ export default function MovieSelection() {
       return
     }
     
-    // 準備確認資料
-    const addedVideos = monthlyVideos.filter(v => pendingChanges.add.has(v.id))
+    // 從所有月份的影片中找出待新增的影片
+    const allVideos = Object.values(allMonthsVideos).flat()
+    const addedVideos = allVideos.filter(v => pendingChanges.add.has(v.id))
+    
+    // 移除重複的影片（同一影片可能出現在多個月份）
+    const uniqueAddedVideos = Array.from(
+      new Map(addedVideos.map(v => [v.id, v])).values()
+    )
+    
     const removedVideos = customerList
       .filter(item => pendingChanges.remove.has(item.video_id))
       .map(item => item.videos)
@@ -271,7 +288,7 @@ export default function MovieSelection() {
       newTotal,
       addedCount: pendingChanges.add.size,
       removedCount: pendingChanges.remove.size,
-      addedVideos,
+      addedVideos: uniqueAddedVideos,
       removedVideos
     })
     
@@ -443,7 +460,7 @@ export default function MovieSelection() {
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      提交變更
+                      提交選擇
                     </>
                   )}
                 </button>
@@ -637,7 +654,7 @@ export default function MovieSelection() {
       {showConfirmModal && createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
-            <h2 className="text-2xl font-bold mb-4">確認提交變更</h2>
+            <h2 className="text-2xl font-bold mb-4">確認提交選擇</h2>
             
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <div className="grid grid-cols-2 gap-4 text-sm">
@@ -707,7 +724,7 @@ export default function MovieSelection() {
                 ) : (
                   <>
                     <Check className="w-4 h-4" />
-                    確認提交
+                    確認提交選擇
                   </>
                 )}
               </button>
