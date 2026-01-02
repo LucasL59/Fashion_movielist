@@ -1,5 +1,6 @@
 /**
  * 應用程式入口文件
+ * Build: 2026-01-02 v1.0.1 - Force cache clear
  */
 
 import React from 'react'

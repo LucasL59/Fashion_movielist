@@ -23,6 +23,9 @@ export default function MovieSelection() {
   const { user } = useAuth()
   const { showToast } = useToast()
   
+  // Version check - force new build hash
+  console.log('🎬 MovieSelection v1.0.1 - Loaded')
+  
   // 當前月份影片
   const [batch, setBatch] = useState(null)
   const [monthlyVideos, setMonthlyVideos] = useState([])

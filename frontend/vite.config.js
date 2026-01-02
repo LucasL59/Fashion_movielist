@@ -10,6 +10,10 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    // 強制清除緩存重新構建
+    emptyOutDir: true,
+  },
   server: {
     port: 5173,
     proxy: {
