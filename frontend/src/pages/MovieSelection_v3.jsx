@@ -232,17 +232,13 @@ export default function MovieSelection() {
     const videoId = video.id
     const videoTitle = video.title
     
-    // 使用標題判斷是否已擁有（跨月份判斷）
-    const isOwnedByTitle = customerListTitles.has(videoTitle) || pendingChangesTitles.add.has(videoTitle)
-    const isOwnedById = customerListIds.has(videoId)
-    const isPendingRemoveByTitle = pendingChangesTitles.remove.has(videoTitle)
+    // 檢查影片狀態（使用標題判斷，支援跨月份）
+    const isOwnedInDb = customerListTitles.has(videoTitle) || customerListIds.has(videoId)
+    const isPendingAdd = pendingChangesTitles.add.has(videoTitle)
+    const isPendingRemove = pendingChangesTitles.remove.has(videoTitle)
     
-    // 實際判斷：優先使用標題判斷（跨月份），其次使用 ID
-    const isOwned = isOwnedByTitle || isOwnedById
-    const isPendingRemove = isPendingRemoveByTitle
-    
-    if (isOwned && !isPendingRemove) {
-      // 已擁有且未標記移除 → 標記為移除
+    // 情況 1: 已在資料庫中 + 未標記移除 → 標記為移除
+    if (isOwnedInDb && !isPendingRemove) {
       setPendingChanges(prev => ({
         ...prev,
         remove: new Set([...prev.remove, videoId])
@@ -251,8 +247,9 @@ export default function MovieSelection() {
         ...prev,
         remove: new Set([...prev.remove, videoTitle])
       }))
-    } else if (isOwned && isPendingRemove) {
-      // 已擁有且已標記移除 → 取消移除
+    } 
+    // 情況 2: 已在資料庫中 + 已標記移除 → 取消移除
+    else if (isOwnedInDb && isPendingRemove) {
       setPendingChanges(prev => {
         const newRemove = new Set(prev.remove)
         newRemove.delete(videoId)
@@ -263,8 +260,27 @@ export default function MovieSelection() {
         newRemove.delete(videoTitle)
         return { ...prev, remove: newRemove }
       })
-    } else if (!isOwned) {
-      // 未擁有 → 標記為新增
+    } 
+    // 情況 3: 不在資料庫中 + 已標記新增 → 取消新增
+    else if (!isOwnedInDb && isPendingAdd) {
+      // 從 pendingChanges.add 中移除所有相同標題的影片 ID
+      setPendingChanges(prev => {
+        const newAdd = new Set(prev.add)
+        // 找出所有相同標題的影片 ID 並移除
+        const allVideos = Object.values(allMonthsVideos).flat()
+        allVideos
+          .filter(v => v.title === videoTitle)
+          .forEach(v => newAdd.delete(v.id))
+        return { ...prev, add: newAdd }
+      })
+      setPendingChangesTitles(prev => {
+        const newAdd = new Set(prev.add)
+        newAdd.delete(videoTitle)
+        return { ...prev, add: newAdd }
+      })
+    } 
+    // 情況 4: 不在資料庫中 + 未標記新增 → 標記為新增
+    else if (!isOwnedInDb && !isPendingAdd) {
       setPendingChanges(prev => ({
         ...prev,
         add: new Set([...prev.add, videoId])
@@ -273,18 +289,6 @@ export default function MovieSelection() {
         ...prev,
         add: new Set([...prev.add, videoTitle])
       }))
-    } else {
-      // 已標記新增 → 取消新增
-      setPendingChanges(prev => {
-        const newAdd = new Set(prev.add)
-        newAdd.delete(videoId)
-        return { ...prev, add: newAdd }
-      })
-      setPendingChangesTitles(prev => {
-        const newAdd = new Set(prev.add)
-        newAdd.delete(videoTitle)
-        return { ...prev, add: newAdd }
-      })
     }
   }
   
@@ -293,17 +297,22 @@ export default function MovieSelection() {
     const videoId = video.id
     const videoTitle = video.title
     
-    // 使用標題判斷是否已擁有（跨月份判斷）
-    const isOwnedByTitle = customerListTitles.has(videoTitle)
-    const isOwnedById = customerListIds.has(videoId)
-    const isPendingAddByTitle = pendingChangesTitles.add.has(videoTitle)
-    const isPendingRemoveByTitle = pendingChangesTitles.remove.has(videoTitle)
+    // 檢查是否在資料庫中已擁有（使用標題跨月份判斷）
+    const isOwnedInDb = customerListTitles.has(videoTitle) || customerListIds.has(videoId)
     
-    const isOwned = isOwnedByTitle || isOwnedById
+    // 檢查是否在待處理變更中（使用標題跨月份判斷）
+    const isPendingAdd = pendingChangesTitles.add.has(videoTitle)
+    const isPendingRemove = pendingChangesTitles.remove.has(videoTitle)
     
-    if (isOwned && !isPendingRemoveByTitle) return 'owned'
-    if (isOwned && isPendingRemoveByTitle) return 'pending_remove'
-    if (!isOwned && isPendingAddByTitle) return 'pending_add'
+    // 優先級判斷：
+    // 1. 如果在資料庫中 + 未標記移除 = owned
+    // 2. 如果在資料庫中 + 已標記移除 = pending_remove
+    // 3. 如果不在資料庫中 + 已標記新增 = pending_add
+    // 4. 其他 = available
+    
+    if (isOwnedInDb && !isPendingRemove) return 'owned'
+    if (isOwnedInDb && isPendingRemove) return 'pending_remove'
+    if (!isOwnedInDb && isPendingAdd) return 'pending_add'
     return 'available'
   }
   
