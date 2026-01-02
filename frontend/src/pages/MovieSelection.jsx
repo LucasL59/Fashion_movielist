@@ -59,6 +59,7 @@ export default function MovieSelection() {
 
   // 計算當前選擇的 ID（累積清單 + 待處理新增 - 待處理移除）
   const currentSelectedIds = useMemo(() => {
+    if (!customerVideoIds) return new Set()
     const ids = new Set(customerVideoIds)
     pendingChanges.add.forEach(id => ids.add(id))
     pendingChanges.remove.forEach(id => ids.delete(id))
@@ -72,8 +73,8 @@ export default function MovieSelection() {
 
   // 計算差異用於顯示
   const changesForDisplay = useMemo(() => {
-    const addedVideos = monthlyVideos.filter(v => pendingChanges.add.has(v.id))
-    const removedVideos = customerList.filter(v => pendingChanges.remove.has(v.id))
+    const addedVideos = (monthlyVideos || []).filter(v => pendingChanges.add.has(v.id))
+    const removedVideos = (customerList || []).filter(v => pendingChanges.remove.has(v.id))
     
     return {
       added: addedVideos,
@@ -143,15 +144,26 @@ export default function MovieSelection() {
       setLoadingCustomerList(true)
       const response = await getCustomerList(user.id)
       
-      if (response.success && response.data) {
+      if (response.success && response.data && Array.isArray(response.data)) {
         setCustomerList(response.data)
         const videoIds = new Set(response.data.map(v => v.id))
         setCustomerVideoIds(videoIds)
         console.log(`✅ 已載入客戶清單: ${response.data.length} 部影片`)
+      } else {
+        // 沒有資料或格式不正確，初始化為空陣列
+        setCustomerList([])
+        setCustomerVideoIds(new Set())
+        console.log('ℹ️ 客戶尚未建立清單')
       }
     } catch (error) {
       console.error('❌ 載入客戶清單失敗:', error)
-      showToast('載入您的影片清單失敗', 'error')
+      // 初始化為空陣列，避免 undefined 錯誤
+      setCustomerList([])
+      setCustomerVideoIds(new Set())
+      // 只在非 404 錯誤時顯示 toast
+      if (error.response?.status !== 404) {
+        showToast('載入您的影片清單失敗', 'error')
+      }
     } finally {
       setLoadingCustomerList(false)
     }
@@ -283,10 +295,10 @@ export default function MovieSelection() {
   }
 
   // 分頁邏輯
-  const totalPages = Math.ceil(monthlyVideos.length / PAGE_SIZE)
+  const totalPages = Math.ceil((monthlyVideos?.length || 0) / PAGE_SIZE)
   const displayedVideos = showAllPages 
-    ? monthlyVideos 
-    : monthlyVideos.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+    ? (monthlyVideos || []) 
+    : (monthlyVideos || []).slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
   
   const pageNumbers = Array.from({ length: totalPages }, (_, i) => i + 1)
 
