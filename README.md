@@ -1,6 +1,6 @@
 # 每月影片選擇系統 (Monthly Movie Selection System)
 
-> **版本**：v3.1.1 ｜ **最後更新**：2026-01-05 ｜ **狀態**：✅ 可部署、可測試、已優化
+> **版本**：v3.1.2 ｜ **最後更新**：2026-01-05 ｜ **狀態**：✅ 可部署、可測試、已優化
 
 ## 🔰 專案簡介
 
@@ -40,6 +40,20 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 ## 🆕 2026-01-05 更新重點
 
 > 完整說明請見相關技術文檔
+
+### v3.1.2 緊急修復：已選清單頁面錯誤 🔧
+
+- **🐛 修復 500 錯誤**：
+  - 問題：`selections.js` 第 598 行引用了未定義的 `currentSelections` 和 `previousSelections` 變數
+  - 原因：v3 重構時遺留的舊代碼，這些變數已不存在
+  - 修復：從 `historyData`（selection_history 表）正確提取影片 ID
+  - 影響：管理員「客戶清單總覽」頁面現在可以正常訪問
+
+- **✅ 正確的影片 ID 收集**：
+  - 從 `customer_current_list` 收集當前清單的影片 ID
+  - 從 `selection_history.added_videos` 收集新增影片的 ID
+  - 從 `selection_history.removed_videos` 收集移除影片的 ID
+  - 使用 Set 去重後批次查詢影片詳情
 
 ### v3.1.1 郵件通知月份追蹤優化 📧
 
