@@ -191,7 +191,13 @@ export default function SelectionHistory() {
         </div>
       )}
       
-      {selections.length === 0 ? (
+      {/* Loading 狀態 */}
+      {loading ? (
+        <div className="card text-center py-12">
+          <Loader className="h-12 w-12 text-primary-600 mx-auto mb-4 animate-spin" />
+          <p className="text-gray-600">載入選擇記錄中...</p>
+        </div>
+      ) : selections.length === 0 ? (
         <div className="card text-center py-12">
           <History className="h-16 w-16 text-gray-400 mx-auto mb-4" />
           <h2 className="text-2xl font-bold text-gray-900 mb-2">尚無選擇記錄</h2>

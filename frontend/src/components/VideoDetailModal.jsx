@@ -27,9 +27,9 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
           <X className="h-5 w-5" />
         </button>
 
-        {/* 影片封面 - 使用 2:3 比例（海報比例）*/}
-        <div className="relative w-full bg-gradient-to-b from-gray-900 to-gray-800 py-6 flex justify-center">
-          <div className="relative w-3/5 max-w-xs aspect-[2/3] bg-gray-100 rounded-lg overflow-hidden shadow-2xl">
+        {/* 影片封面 - 使用 2:3 比例（海報比例），限制最大高度 */}
+        <div className="relative w-full bg-gradient-to-b from-gray-900 to-gray-800 py-4 flex justify-center flex-shrink-0">
+          <div className="relative w-3/5 max-w-xs max-h-[35vh] aspect-[2/3] bg-gray-100 rounded-lg overflow-hidden shadow-2xl">
             {video.thumbnail_url ? (
               <img
                 src={video.thumbnail_url}
@@ -41,8 +41,8 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
                 <Film className="h-16 w-16 text-gray-400" />
               </div>
             )}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-4">
-              <h2 className="text-lg font-bold text-white mb-1 leading-tight">{video.title}</h2>
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-3">
+              <h2 className="text-base font-bold text-white mb-1 leading-tight">{video.title}</h2>
               {video.title_en && (
                 <p className="text-white/90 text-xs">{video.title_en}</p>
               )}
@@ -50,9 +50,9 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
           </div>
         </div>
 
-        {/* 影片詳細資訊 - 可滾動區域 */}
-        <div className="flex-1 overflow-y-auto">
-          <div className="p-6 space-y-4">
+        {/* 影片詳細資訊 - 可滾動區域，最小高度確保可見 */}
+        <div className="flex-1 overflow-y-auto min-h-[120px]">
+          <div className="p-4 sm:p-6 space-y-4">
           {/* 簡介 */}
           {video.description && (
             <div>
