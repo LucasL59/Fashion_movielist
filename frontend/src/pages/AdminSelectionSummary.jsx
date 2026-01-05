@@ -7,7 +7,6 @@
 
 import { useState, useEffect } from 'react'
 import {
-  Calendar,
   Film,
   Search,
   Loader,
@@ -17,57 +16,30 @@ import {
   Layers,
   PlusCircle,
   MinusCircle,
-  CheckCircle
+  CheckCircle,
+  Grid,
+  List as ListIcon
 } from 'lucide-react'
-import { getMonthlySelectionSummary, getAvailableMonths } from '../lib/api'
+import { getMonthlySelectionSummary } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
-import Select from '../components/Select'
 import SelectionDiffSection from '../components/SelectionDiffSection'
 
 export default function AdminSelectionSummary() {
   const { showToast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [availableMonths, setAvailableMonths] = useState([])
-  const [selectedMonth, setSelectedMonth] = useState('')
   const [summaryData, setSummaryData] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedCustomers, setExpandedCustomers] = useState(new Set())
+  const [viewMode, setViewMode] = useState('grid') // 'grid' | 'list'
   
   useEffect(() => {
-    loadMonths()
+    loadSummary()
   }, [])
-  
-  useEffect(() => {
-    if (selectedMonth) {
-      loadSummary()
-    }
-  }, [selectedMonth])
-  
-  async function loadMonths() {
-    try {
-      const response = await getAvailableMonths()
-      const monthsData = response.data || []
-      setAvailableMonths(monthsData)
-      
-      // 預設選擇當前月份
-      const currentMonth = new Date().toISOString().slice(0, 7)
-      const monthStrings = monthsData.map(m => m.month)
-      
-      if (monthStrings.includes(currentMonth)) {
-        setSelectedMonth(currentMonth)
-      } else if (monthsData.length > 0) {
-        setSelectedMonth(monthsData[0].month)
-      }
-    } catch (error) {
-      console.error('載入月份列表失敗:', error)
-      showToast('載入月份列表失敗', 'error')
-    }
-  }
   
   async function loadSummary() {
     try {
       setLoading(true)
-      const response = await getMonthlySelectionSummary(selectedMonth)
+      const response = await getMonthlySelectionSummary()
       
       // v3 API 返回 customerLists 而非 summaries
       if (response.data.customerLists) {
@@ -106,11 +78,6 @@ export default function AdminSelectionSummary() {
     }
   }
   
-  function formatMonth(monthStr) {
-    if (!monthStr) return ''
-    const [year, month] = monthStr.split('-')
-    return `${year}年${month}月`
-  }
 
   function formatDateTime(dateString) {
     if (!dateString) return ''
@@ -160,35 +127,16 @@ export default function AdminSelectionSummary() {
       
       {/* 控制列 */}
       <div className="card">
-        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-          {/* 月份選擇 */}
-          <div className="flex items-center gap-3">
-            <Calendar className="h-5 w-5 text-gray-400" />
-            <div className="w-48">
-              <Select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                options={availableMonths.map(monthData => ({ 
-                  value: monthData.month, 
-                  label: `${formatMonth(monthData.month)} - ${monthData.batchName}` 
-                }))}
-                placeholder="選擇月份"
-                disabled={loading}
-              />
-            </div>
-          </div>
-          
-          {/* 搜尋 */}
-          <div className="relative w-full md:w-64">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="搜尋客戶名稱或 Email"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
+        {/* 搜尋 */}
+        <div className="relative w-full md:w-96">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="搜尋客戶名稱或 Email"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+          />
         </div>
         
         {/* 統計卡片 */}
@@ -227,7 +175,7 @@ export default function AdminSelectionSummary() {
           <p className="text-gray-600">
             {searchTerm 
               ? '請嘗試其他搜尋關鍵字' 
-              : `${formatMonth(selectedMonth)}目前沒有客戶提交選擇`}
+              : '目前沒有客戶提交選擇'}
           </p>
         </div>
       )}
@@ -389,15 +337,36 @@ export default function AdminSelectionSummary() {
                               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary-50 text-primary-600">
                                 <Film className="h-4 w-4" />
                               </span>
-                              當月擁有的片單
+                              當前擁有的片單
                             </h5>
-                            <span className="text-sm text-gray-500">
-                              共 {summary.currentSelection.videoCount || 0} 部
-                            </span>
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm text-gray-500">
+                                共 {summary.currentSelection.videoCount || 0} 部
+                              </span>
+                              {/* 視圖切換按鈕 */}
+                              <div className="flex items-center gap-1 rounded-lg bg-gray-100 p-1">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setViewMode('grid'); }}
+                                  className={`p-1.5 rounded transition-colors ${viewMode === 'grid' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                  title="圖表視圖"
+                                >
+                                  <Grid className="h-4 w-4" />
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setViewMode('list'); }}
+                                  className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-white text-primary-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                  title="清單視圖"
+                                >
+                                  <ListIcon className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
                           </div>
                           {summary.currentSelection.videos?.length > 0 ? (
-                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-                              {summary.currentSelection.videos.map((video) => (
+                            viewMode === 'grid' ? (
+                              /* 圖表視圖 */
+                              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+                                {summary.currentSelection.videos.map((video) => (
                                 <div
                                   key={video.id}
                                   className="group relative aspect-[2/3] rounded-2xl border border-gray-100 bg-gray-50 shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
@@ -409,7 +378,7 @@ export default function AdminSelectionSummary() {
                                       <Film className="h-8 w-8 text-gray-400" />
                                     </div>
                                   )}
-                                  <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from黑/80 to-transparent p-3">
+                                  <div className="absolute inset-x-0 bottom-0 rounded-b-2xl bg-gradient-to-t from-black/80 to-transparent p-3">
                                     <p className="text-sm font-semibold text-white line-clamp-2">{video.title}</p>
                                     {video.title_en && (
                                       <p className="text-xs text-white/70 line-clamp-1">{video.title_en}</p>
@@ -417,10 +386,42 @@ export default function AdminSelectionSummary() {
                                   </div>
                                 </div>
                               ))}
-                            </div>
+                              </div>
+                            ) : (
+                              /* 清單視圖 */
+                              <div className="space-y-2">
+                                {summary.currentSelection.videos.map((video, index) => (
+                                  <div
+                                    key={video.id}
+                                    className="flex items-center gap-4 p-3 rounded-lg border border-gray-100 bg-white hover:bg-gray-50 transition-colors"
+                                  >
+                                    <span className="text-sm text-gray-500 font-medium min-w-[2rem]">
+                                      {String(index + 1).padStart(2, '0')}
+                                    </span>
+                                    {video.thumbnail_url ? (
+                                      <img
+                                        src={video.thumbnail_url}
+                                        alt={video.title}
+                                        className="w-12 h-16 rounded object-cover flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-12 h-16 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                        <Film className="h-5 w-5 text-gray-400" />
+                                      </div>
+                                    )}
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-gray-900 truncate">{video.title}</p>
+                                      {video.title_en && (
+                                        <p className="text-sm text-gray-500 truncate">{video.title_en}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            )
                           ) : (
                             <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-gray-500">
-                              此月份尚未選擇任何影片
+                              尚未選擇任何影片
                             </div>
                           )}
                         </div>
@@ -442,7 +443,7 @@ export default function AdminSelectionSummary() {
                     ) : (
                       <div className="text-center py-8 text-gray-500">
                         <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                        <p>此客戶尚未提交 {formatMonth(selectedMonth)} 的片單</p>
+                        <p>此客戶尚未提交片單</p>
                       </div>
                     )}
                   </div>

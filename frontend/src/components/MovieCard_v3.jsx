@@ -5,14 +5,15 @@
  */
 
 import { useState } from 'react'
-import { Check, Clock, Star, Film, X, Plus, Minus } from 'lucide-react'
+import { Check, Clock, Star, Film, X, Plus, Minus, Eye } from 'lucide-react'
 
 export default function MovieCard_v3({ 
   video, 
   selected, 
   onToggle, 
   displayState = 'available',
-  disabled = false 
+  disabled = false,
+  onPreview = null // 新增：預覽功能回調
 }) {
   const [imageError, setImageError] = useState(false)
   
@@ -105,6 +106,20 @@ export default function MovieCard_v3({
               {styles.badgeText}
             </span>
           </div>
+        )}
+        
+        {/* 預覽按鈕 */}
+        {onPreview && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // 防止觸發卡片的 onClick
+              onPreview(video);
+            }}
+            className="absolute top-2 left-2 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full transition-colors opacity-0 group-hover:opacity-100"
+            title="查看詳情"
+          >
+            <Eye className="h-4 w-4" />
+          </button>
         )}
       </div>
       

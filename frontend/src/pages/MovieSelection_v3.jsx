@@ -18,6 +18,7 @@ import {
 import MovieCard_v3 from '../components/MovieCard_v3'
 import Select from '../components/Select'
 import BrandTransition from '../components/BrandTransition'
+import VideoDetailModal from '../components/VideoDetailModal'
 import { 
   getVideosByMonth, 
   getAvailableMonths, 
@@ -70,6 +71,7 @@ export default function MovieSelection() {
   const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [confirmData, setConfirmData] = useState(null)
   const [submitting, setSubmitting] = useState(false)
+  const [previewVideo, setPreviewVideo] = useState(null) // 預覽的影片
   
   // 計算當前選擇的影片總數
   const currentSelectedCount = useMemo(() => {
@@ -568,6 +570,7 @@ export default function MovieSelection() {
                   selected={getVideoDisplayState(video) !== 'pending_remove'}
                   onToggle={() => handleVideoClick(video)}
                   displayState={getVideoDisplayState(video)}
+                  onPreview={setPreviewVideo}
                 />
               ))}
             </div>
@@ -627,6 +630,7 @@ export default function MovieSelection() {
                 selected={['owned', 'pending_add'].includes(getVideoDisplayState(video))}
                 onToggle={() => handleVideoClick(video)}
                 displayState={getVideoDisplayState(video)}
+                onPreview={setPreviewVideo}
               />
             ))}
           </div>
@@ -800,6 +804,27 @@ export default function MovieSelection() {
           </div>
         </div>,
         document.body
+      )}
+      
+      {/* 影片詳細預覽 Modal */}
+      {previewVideo && (
+        <VideoDetailModal
+          video={previewVideo}
+          onClose={() => setPreviewVideo(null)}
+          onAction={handleVideoClick}
+          actionLabel={
+            getVideoDisplayState(previewVideo) === 'pending_remove' ? '取消移除' :
+            getVideoDisplayState(previewVideo) === 'owned' ? '移除影片' :
+            getVideoDisplayState(previewVideo) === 'pending_add' ? '取消新增' :
+            '選擇影片'
+          }
+          actionIcon={
+            getVideoDisplayState(previewVideo) === 'pending_remove' ? Check :
+            getVideoDisplayState(previewVideo) === 'owned' ? Minus :
+            getVideoDisplayState(previewVideo) === 'pending_add' ? X :
+            Plus
+          }
+        />
       )}
     </div>
   )
