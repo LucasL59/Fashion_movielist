@@ -594,13 +594,27 @@ router.get('/customer-lists', requireAuth, async (req, res) => {
       }
     });
     
-    // 從選擇歷史收集影片 ID
-    currentSelections.forEach(sel => {
-      (sel.video_ids || []).forEach(id => allVideoIds.add(id));
-    });
-    previousSelections.forEach(sel => {
-      (sel.video_ids || []).forEach(id => allVideoIds.add(id));
-    });
+    // 從變更歷史收集影片 ID（added_videos 和 removed_videos）
+    if (historyData) {
+      historyData.forEach(record => {
+        // 從 added_videos 收集
+        if (Array.isArray(record.added_videos)) {
+          record.added_videos.forEach(video => {
+            if (video.video_id) {
+              allVideoIds.add(video.video_id);
+            }
+          });
+        }
+        // 從 removed_videos 收集
+        if (Array.isArray(record.removed_videos)) {
+          record.removed_videos.forEach(video => {
+            if (video.video_id) {
+              allVideoIds.add(video.video_id);
+            }
+          });
+        }
+      });
+    }
     
     // 批次獲取所有影片詳情
     console.log(`🎬 需要查詢 ${allVideoIds.size} 部影片的詳情`);
