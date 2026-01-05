@@ -1,6 +1,6 @@
 # 每月影片選擇系統 (Monthly Movie Selection System)
 
-> **版本**：v3.1.2 ｜ **最後更新**：2026-01-05 ｜ **狀態**：✅ 可部署、可測試、已優化
+> **版本**：v3.3.0 ｜ **最後更新**：2026-01-05 ｜ **狀態**：✅ 可部署、可測試、已優化
 
 ## 🔰 專案簡介
 
@@ -40,6 +40,69 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 ## 🆕 2026-01-05 更新重點
 
 > 完整說明請見相關技術文檔
+
+### v3.3.0 認證系統強化與 Session 防護 🛡️
+
+- **🔐 401 自動處理機制**：
+  - 當 API 收到 401 Unauthorized 時，自動清除過期的 Session
+  - 自動跳轉到登入頁面，並顯示「登入已過期」提示
+  - 防止重複處理（3 秒內只處理一次）
+  - 排除登入相關 API，避免影響正常登入流程
+
+- **⏰ Session 定期檢查**：
+  - 每 5 分鐘自動檢查 Session 有效性
+  - 若 Session 過期但前端狀態還在，自動清除用戶狀態
+  - 處理 `TOKEN_REFRESHED` 事件，確保 Token 刷新後正常運作
+
+- **📝 登入頁面過期提示**：
+  - 當因 Session 過期跳轉時，顯示友善的警告訊息
+  - 「為了您的帳號安全，請重新登入」
+  - 自動清除 URL 參數，保持乾淨的網址
+
+- **🧹 清理調試代碼**：
+  - 移除 v3.2.6-v3.2.8 的詳細調試日誌
+  - 生產環境只保留必要的錯誤日誌
+  - 保持代碼整潔和性能最佳化
+
+### v3.2.3 響應式彈窗與選擇紀錄載入優化 📱
+
+- **📱 VideoDetailModal 響應式優化**：
+  - 封面圖片最大高度限制 `max-h-[35vh]`，避免在小螢幕上過度放大
+  - 描述區域最小高度 `min-h-[120px]`，確保內容始終可見
+  - 自適應各種螢幕解析度
+
+- **⏳ 選擇紀錄載入狀態**：
+  - 客戶選擇紀錄頁面添加載入動畫
+  - 避免資料載入中顯示「尚無記錄」的錯誤訊息
+
+### v3.2.2 影片預覽彈窗佈局修復 🎬
+
+- **🖼️ 封面圖片優化**：
+  - 使用 `object-contain` 顯示完整封面，不再裁切
+  - 添加深色背景 `bg-gray-900` 處理非標準比例圖片
+  
+- **📜 描述區域可滾動**：
+  - 使用 Flexbox 佈局確保長描述可以滾動查看
+  - 操作按鈕始終保持在可見區域底部
+
+### v3.2.1 影片預覽調整與管理員篩選優化 🔍
+
+- **🎨 封面比例調整**：
+  - 預覽彈窗使用 2:3 縱向比例，適合電影海報
+  - 減小彈窗寬度，提升視覺焦點
+
+- **📅 管理員儀表板月份篩選**：
+  - 將「客戶選擇明細」的批次篩選改為月份篩選
+  - 根據客戶提交時間篩選，符合實際業務流程
+
+### v3.2.0 客戶清單總覽優化與影片預覽 👁️
+
+- **🎯 移除不必要的月份選擇器**
+- **🔄 新增網格/清單視圖切換**
+- **👁️ 新增影片預覽功能**：
+  - `VideoDetailModal` 組件顯示完整影片資訊
+  - `MovieCard_v3` 添加預覽按鈕（hover 時顯示眼睛圖示）
+  - 不改變現有選擇流程，額外提供詳情查看入口
 
 ### v3.1.2 緊急修復：已選清單頁面錯誤 🔧
 
@@ -566,16 +629,17 @@ npm run build
 | 目的 | 推薦閱讀 |
 |------|-----------|
 | 第一次接觸 | [START_HERE.md](START_HERE.md)、[QUICK_START.md](QUICK_START.md)、[QUICK_REFERENCE.md](QUICK_REFERENCE.md) |
+| v3.3 認證強化 ⭐ | 401 自動處理、Session 防護、過期提示 - 詳見本 README |
 | 了解 v3.0 更新 | [REFACTOR_V3_DEPLOYMENT_GUIDE.md](REFACTOR_V3_DEPLOYMENT_GUIDE.md)、[CRITICAL_BUG_FIX.md](CRITICAL_BUG_FIX.md)、[UI_UX_OPTIMIZATION_SUMMARY.md](UI_UX_OPTIMIZATION_SUMMARY.md) |
 | v3.0 技術修正 | [PORTAL_FIX_SUMMARY.md](PORTAL_FIX_SUMMARY.md)、[GLASSMORPHISM_TOAST_FIX.md](GLASSMORPHISM_TOAST_FIX.md)、[UI_FIX_SUMMARY.md](UI_FIX_SUMMARY.md) |
-| v3.0.4 性能優化 ⭐ | [RLS_PERFORMANCE_FIX_SUMMARY.md](RLS_PERFORMANCE_FIX_SUMMARY.md)、[VERIFICATION_REPORT_RLS_FIX.md](VERIFICATION_REPORT_RLS_FIX.md) |
+| v3.0.4 性能優化 | [RLS_PERFORMANCE_FIX_SUMMARY.md](RLS_PERFORMANCE_FIX_SUMMARY.md)、[VERIFICATION_REPORT_RLS_FIX.md](VERIFICATION_REPORT_RLS_FIX.md) |
 | 了解 v2.0 更新 | [UPDATE_SUMMARY.md](UPDATE_SUMMARY.md)、[ANSWERS_TO_YOUR_QUESTIONS.md](ANSWERS_TO_YOUR_QUESTIONS.md)、[IMPLEMENTATION_COMPLETE.md](IMPLEMENTATION_COMPLETE.md) |
 | v2.1 功能與 UI 改版 | [NEW_FEATURES_SUMMARY.md](NEW_FEATURES_SUMMARY.md)、[UI_IMPROVEMENTS_SUMMARY.md](UI_IMPROVEMENTS_SUMMARY.md)、[DESIGN_REFINEMENT_SUMMARY.md](DESIGN_REFINEMENT_SUMMARY.md) |
 | 2025-11 優化與調整 | [UPDATE_SUMMARY_2025_11_24.md](UPDATE_SUMMARY_2025_11_24.md)、[OPTIMIZATION_LOG_2025_11.md](OPTIMIZATION_LOG_2025_11.md) |
 | 部署與維運 | [DEPLOYMENT_RUNBOOK.md](DEPLOYMENT_RUNBOOK.md)、[DEPLOYMENT.md](DEPLOYMENT.md)、[ENV_SETUP_GUIDE.md](ENV_SETUP_GUIDE.md) |
 | 權限與測試 | [PERMISSION_SYSTEM_UPDATE.md](PERMISSION_SYSTEM_UPDATE.md)、[TESTING_NEW_FEATURES.md](TESTING_NEW_FEATURES.md) |
 | 部署與設定 | [DEPLOYMENT.md](DEPLOYMENT.md)、[ENV_SETUP_GUIDE.md](ENV_SETUP_GUIDE.md)、[AZURE_AD_SETUP_FIX.md](AZURE_AD_SETUP_FIX.md) |
-| 資料庫 | [database/README.md](database/README.md)、[database/schema.sql](database/schema.sql)、[migration_fix_rls_performance.sql](database/migration_fix_rls_performance.sql) ⭐ |
+| 資料庫 | [database/README.md](database/README.md)、[database/schema.sql](database/schema.sql)、[migration_fix_rls_performance.sql](database/migration_fix_rls_performance.sql) |
 
 更多分類（依角色/目的）請見文件索引。
 

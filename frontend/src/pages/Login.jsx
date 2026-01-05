@@ -2,10 +2,10 @@
  * 登入頁面 - Modern Refined
  */
 
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { Film, Mail, Lock, AlertCircle, Loader, ArrowLeft } from 'lucide-react'
+import { Film, Mail, Lock, AlertCircle, Loader, ArrowLeft, Clock } from 'lucide-react'
 import { requestPasswordReset } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
 import BrandTransition from '../components/BrandTransition'
@@ -20,10 +20,22 @@ export default function Login() {
   const [resetLoading, setResetLoading] = useState(false)
   const [resetMessage, setResetMessage] = useState('')
   const [redirecting, setRedirecting] = useState(false)
+  const [sessionExpired, setSessionExpired] = useState(false)
   
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const { showToast } = useToast()
+  const [searchParams] = useSearchParams()
+  
+  // 檢查是否因 Session 過期而跳轉
+  useEffect(() => {
+    if (searchParams.get('expired') === 'true') {
+      setSessionExpired(true)
+      showToast('您的登入已過期，請重新登入', 'warning')
+      // 清除 URL 參數
+      navigate('/login', { replace: true })
+    }
+  }, [searchParams, showToast, navigate])
   
   async function handleSubmit(e) {
     e.preventDefault()
@@ -163,6 +175,17 @@ export default function Login() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Session 過期提示 */}
+                {sessionExpired && !error && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
+                    <Clock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-medium text-amber-800">登入已過期</p>
+                      <p className="text-xs text-amber-600 mt-0.5">為了您的帳號安全，請重新登入</p>
+                    </div>
+                  </div>
+                )}
+                
                 {error && (
                   <div className="bg-red-50 border border-red-100 rounded-xl p-4 flex items-start gap-3 animate-fade-in">
                     <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />

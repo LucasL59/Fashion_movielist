@@ -63,25 +63,56 @@ export function AuthProvider({ children }) {
       }
     })
     
-    // 監聽認證狀態變化
+    // 監聯認證狀態變化
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      // 處理 Token 刷新失敗
-      if (event === 'TOKEN_REFRESH_SHUTDOWN' || event === 'SIGNED_OUT') {
-        setUser(null)
-        setLoading(false)
-        return
-      }
-
-      if (session?.user) {
-        fetchUserProfile(session.user.id)
-      } else {
-        setUser(null)
-        setLoading(false)
+      // 處理各種認證事件
+      switch (event) {
+        case 'TOKEN_REFRESHED':
+          // Token 成功刷新，繼續正常流程
+          if (session?.user) {
+            fetchUserProfile(session.user.id)
+          }
+          break
+          
+        case 'TOKEN_REFRESH_SHUTDOWN':
+        case 'SIGNED_OUT':
+          // Token 刷新失敗或登出
+          setUser(null)
+          setLoading(false)
+          break
+          
+        case 'SIGNED_IN':
+        case 'USER_UPDATED':
+          if (session?.user) {
+            fetchUserProfile(session.user.id)
+          }
+          break
+          
+        default:
+          if (session?.user) {
+            fetchUserProfile(session.user.id)
+          } else {
+            setUser(null)
+            setLoading(false)
+          }
       }
     })
     
-    return () => subscription.unsubscribe()
-  }, [])
+    // 定期檢查 session 有效性（每 5 分鐘）
+    const sessionCheckInterval = setInterval(async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session && user) {
+        // Session 已過期但 user 狀態還在，清除狀態
+        console.warn('Session 已過期，清除用戶狀態')
+        setUser(null)
+      }
+    }, 5 * 60 * 1000)
+    
+    return () => {
+      subscription.unsubscribe()
+      clearInterval(sessionCheckInterval)
+    }
+  }, [user])
   
   /**
    * 獲取用戶 Profile

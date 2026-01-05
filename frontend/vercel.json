@@ -11,7 +11,7 @@
       "headers": [
         {
           "key": "X-App-Version",
-          "value": "3.2.6"
+          "value": "3.3.0"
         },
         {
           "key": "Cache-Control",

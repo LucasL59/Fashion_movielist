@@ -18,7 +18,6 @@ const api = axios.create({
 /**
  * 從 Supabase 獲取當前的 access token
  * 動態導入避免循環依賴
- * v3.2.6 - 添加詳細調試日誌
  */
 async function getAccessToken() {
   if (typeof window === 'undefined') return null
@@ -29,25 +28,18 @@ async function getAccessToken() {
     const { data: { session }, error } = await supabase.auth.getSession()
     
     if (error) {
-      console.warn('⚠️ [API v3.2.6] 獲取 Supabase session 失敗:', error.message)
+      console.warn('獲取 session 失敗:', error.message)
       return null
     }
     
-    if (!session) {
-      console.log('⚠️ [API v3.2.6] 無 session - 用戶可能未登入')
-      return null
-    }
-    
-    console.log('✅ [API v3.2.6] 成功獲取 token, user:', session.user?.email)
     return session?.access_token || null
   } catch (error) {
-    console.error('❌ [API v3.2.6] 獲取 access token 時發生錯誤:', error)
+    console.error('獲取 access token 錯誤:', error)
     return null
   }
 }
 
 // 請求攔截器（添加認證 token 和禁用緩存）
-// v3.2.6 - 添加詳細調試日誌
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -55,12 +47,9 @@ api.interceptors.request.use(
       const token = await getAccessToken()
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
-        console.log(`🔐 [API v3.2.6] 請求 ${config.url} 已添加 token`)
-      } else {
-        console.warn(`⚠️ [API v3.2.6] 請求 ${config.url} 無 token - 可能導致 401`)
       }
     } catch (error) {
-      console.error('❌ [API v3.2.6] 請求攔截器錯誤:', error)
+      console.error('請求攔截器錯誤:', error)
       // 即使獲取 token 失敗，仍然繼續請求
     }
     
@@ -76,12 +65,46 @@ api.interceptors.request.use(
   }
 )
 
-// 響應攔截器（統一錯誤處理）
+// 401 錯誤處理：自動登出並跳轉到登入頁
+let isHandling401 = false // 防止重複處理
+
+async function handle401Error() {
+  if (isHandling401) return
+  isHandling401 = true
+  
+  try {
+    // 動態導入 supabase 清除 session
+    const { supabase } = await import('./supabase')
+    await supabase.auth.signOut()
+    
+    // 清除本地存儲的認證資訊
+    const keysToRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i)
+      if (key && (key.includes('supabase') || key.includes('auth'))) {
+        keysToRemove.push(key)
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key))
+    
+    // 跳轉到登入頁面（帶上過期提示）
+    const currentPath = window.location.pathname
+    if (currentPath !== '/login') {
+      window.location.href = '/login?expired=true'
+    }
+  } catch (e) {
+    console.error('處理 401 錯誤時發生問題:', e)
+  } finally {
+    // 延遲重置標記，避免短時間內重複處理
+    setTimeout(() => { isHandling401 = false }, 3000)
+  }
+}
+
+// 響應攔截器（統一錯誤處理 + 401 自動登出）
 api.interceptors.response.use(
   (response) => {
     // 處理 304 Not Modified 等沒有 response body 的情況
     if (!response.data && response.status === 304) {
-      console.warn(`⚠️ 收到 304 響應 (${response.config.url})，使用空數據`)
       response.data = {
         success: true,
         data: [],
@@ -90,8 +113,19 @@ api.interceptors.response.use(
     }
     return response
   },
-  (error) => {
-    console.error('API Error:', error)
+  async (error) => {
+    // 處理 401 未授權錯誤
+    if (error.response?.status === 401) {
+      const url = error.config?.url || ''
+      // 排除登入相關的 API（避免登入時的 401 觸發跳轉）
+      const isAuthApi = url.includes('/auth/') || url.includes('/login')
+      
+      if (!isAuthApi) {
+        console.warn('Session 已過期，正在重新導向到登入頁...')
+        await handle401Error()
+      }
+    }
+    
     return Promise.reject(error)
   }
 )
