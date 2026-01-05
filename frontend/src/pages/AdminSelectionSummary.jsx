@@ -71,25 +71,28 @@ export default function AdminSelectionSummary() {
       
       // v3 API 返回 customerLists 而非 summaries
       if (response.data.customerLists) {
-        // 轉換為舊格式以保持前端兼容
+        // 轉換為舊格式以保持前端兼容，同時添加變更追蹤
         setSummaryData({
           ...response.data,
           summaries: response.data.customerLists.map(list => ({
             customer: list.customer,
-            currentSelection: list.videoCount > 0 ? {
-              videoCount: list.videoCount,
+            currentSelection: list.currentList.videoCount > 0 ? {
+              videoCount: list.currentList.videoCount,
               submittedAt: list.lastUpdate,
-              videos: list.videos
+              videos: list.currentList.videos
             } : null,
             previousSelection: null,
             diff: {
-              added: [],
-              removed: [],
-              kept: list.videos || [],
-              addedCount: 0,
-              removedCount: 0,
-              keptCount: list.videoCount
-            }
+              // 使用最後一次變更記錄中的新增/移除影片
+              added: list.lastChange?.addedVideos || [],
+              removed: list.lastChange?.removedVideos || [],
+              kept: list.currentList.videos || [],
+              addedCount: list.lastChange?.addedCount || 0,
+              removedCount: list.lastChange?.removedCount || 0,
+              keptCount: list.currentList.videoCount
+            },
+            // 添加最後變更的完整資訊
+            lastChange: list.lastChange
           }))
         })
       } else {
@@ -286,45 +289,100 @@ export default function AdminSelectionSummary() {
                   <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
                     {hasCurrent ? (
                       <>
-                        <div className="rounded-2xl border border-gray-100 bg-white/70 p-5 space-y-4">
+                          <div className="rounded-2xl border border-gray-100 bg-white/70 p-5 space-y-4">
                           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div>
                               <p className="text-xs uppercase tracking-[0.2em] text-gray-500">{summary.customer.email}</p>
                               <h4 className="text-xl font-semibold text-gray-900">
-                                {formatMonth(selectedMonth)} 片單
+                                當前累積清單
                               </h4>
-                              {hasPrevious && (
+                              {summary.lastChange && (
                                 <p className="text-sm text-gray-500">
-                                  與 {formatMonth(summaryData?.prevMonth)} 相比
+                                  最後更新：{formatDateTime(summary.lastChange.date)}
                                 </p>
                               )}
                             </div>
                             <div className="grid w-full gap-3 md:max-w-xl md:grid-cols-3">
                               <StatCard
                                 icon={Layers}
-                                label="當月片單"
+                                label="目前擁有"
                                 value={`${summary.currentSelection.videoCount || 0} 部`}
                               />
                               <StatCard
                                 icon={PlusCircle}
                                 accent="green"
-                                label="本月新增"
+                                label="最近新增"
                                 value={`${summary.diff?.addedCount || 0} 部`}
                               />
                               <StatCard
                                 icon={MinusCircle}
                                 accent="red"
-                                label="本月下架"
+                                label="最近移除"
                                 value={`${summary.diff?.removedCount || 0} 部`}
                               />
                             </div>
                           </div>
                           {summary.currentSelection.submittedAt && (
                             <p className="text-xs text-gray-500">
-                              最後提交：{formatDateTime(summary.currentSelection.submittedAt)}
+                              最後更新：{formatDateTime(summary.currentSelection.submittedAt)}
                             </p>
                           )}
                         </div>
+                        
+                        {/* 最近變更詳情 */}
+                        {summary.lastChange && (summary.diff.addedCount > 0 || summary.diff.removedCount > 0) && (
+                          <div className="rounded-2xl border border-blue-100 bg-blue-50/30 p-5">
+                            <h5 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                              <Film className="h-5 w-5 text-blue-600" />
+                              最近一次變更明細
+                              <span className="text-sm text-gray-500 font-normal">
+                                ({formatDateTime(summary.lastChange.date)})
+                              </span>
+                            </h5>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              {summary.diff.addedCount > 0 && (
+                                <div>
+                                  <p className="text-sm font-medium text-emerald-700 mb-2 flex items-center gap-1">
+                                    <PlusCircle className="h-4 w-4" />
+                                    新增 {summary.diff.addedCount} 部影片
+                                  </p>
+                                  <div className="space-y-1">
+                                    {summary.diff.added.slice(0, 5).map((video, idx) => (
+                                      <div key={idx} className="text-sm text-gray-700 pl-5">
+                                        • {video.title || video.title_en || '未知影片'}
+                                      </div>
+                                    ))}
+                                    {summary.diff.added.length > 5 && (
+                                      <div className="text-sm text-gray-500 pl-5">
+                                        ...還有 {summary.diff.added.length - 5} 部
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              {summary.diff.removedCount > 0 && (
+                                <div>
+                                  <p className="text-sm font-medium text-red-700 mb-2 flex items-center gap-1">
+                                    <MinusCircle className="h-4 w-4" />
+                                    移除 {summary.diff.removedCount} 部影片
+                                  </p>
+                                  <div className="space-y-1">
+                                    {summary.diff.removed.slice(0, 5).map((video, idx) => (
+                                      <div key={idx} className="text-sm text-gray-700 pl-5">
+                                        • {video.title || video.title_en || '未知影片'}
+                                      </div>
+                                    ))}
+                                    {summary.diff.removed.length > 5 && (
+                                      <div className="text-sm text-gray-500 pl-5">
+                                        ...還有 {summary.diff.removed.length - 5} 部
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
                         <div className="space-y-4">
                           <div className="flex items-center justify-between">
                             <h5 className="text-lg font-semibold text-gray-900 flex items-center gap-2">

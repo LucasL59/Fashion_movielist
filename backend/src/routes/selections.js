@@ -555,26 +555,33 @@ router.get('/customer-lists', requireAuth, async (req, res) => {
     
     console.log(`📋 已為 ${currentListMap.size} 位客戶分組清單資料`);
     
-    // 查詢每個客戶的最後更新時間（從 selection_history）
-    console.log(`🔍 查詢客戶的最後更新時間...`);
+    // 查詢每個客戶的最後一次變更記錄（從 selection_history）
+    console.log(`🔍 查詢客戶的變更歷史...`);
     const { data: historyData, error: historyError } = await supabase
       .from('selection_history')
-      .select('customer_id, snapshot_date')
+      .select('customer_id, snapshot_date, added_videos, removed_videos, total_count, added_count, removed_count')
       .order('snapshot_date', { ascending: false });
     
     if (historyError) {
-      console.error('⚠️ 查詢 selection_history 失敗，將使用 added_at 作為更新時間:', historyError);
+      console.error('⚠️ 查詢 selection_history 失敗:', historyError);
     }
     
-    // 建立最後更新時間的 Map
-    const lastUpdateMap = new Map();
+    // 建立最後變更記錄的 Map（每個客戶只保留最新的一條）
+    const lastChangeMap = new Map();
     if (historyData) {
       historyData.forEach(record => {
-        if (!lastUpdateMap.has(record.customer_id)) {
-          lastUpdateMap.set(record.customer_id, record.snapshot_date);
+        if (!lastChangeMap.has(record.customer_id)) {
+          lastChangeMap.set(record.customer_id, {
+            snapshot_date: record.snapshot_date,
+            added_videos: record.added_videos || [],
+            removed_videos: record.removed_videos || [],
+            total_count: record.total_count || 0,
+            added_count: record.added_count || 0,
+            removed_count: record.removed_count || 0
+          });
         }
       });
-      console.log(`✅ 找到 ${lastUpdateMap.size} 位客戶的更新記錄`);
+      console.log(`✅ 找到 ${lastChangeMap.size} 位客戶的變更記錄`);
     }
     
     // 獲取所有涉及的影片 ID
@@ -626,15 +633,30 @@ router.get('/customer-lists', requireAuth, async (req, res) => {
         const currentList = currentListMap.get(customer.id) || [];
         const currentVideoIds = currentList.map(item => item.video_id).filter(Boolean);
         
-        // 組合影片詳情（從 videosMap 獲取）
+        // 組合當前清單的影片詳情（從 videosMap 獲取）
         const videos = currentVideoIds.map(id => videosMap.get(id)).filter(Boolean);
         
-        // 計算最後更新時間
-        const lastUpdate = lastUpdateMap.get(customer.id) || 
-                          (currentList.length > 0 ? currentList[0]?.added_at : null);
+        // 獲取最後一次變更記錄
+        const lastChange = lastChangeMap.get(customer.id);
+        
+        // 組合最後變更的詳細資訊
+        let lastChangeDetails = null;
+        if (lastChange) {
+          lastChangeDetails = {
+            date: lastChange.snapshot_date,
+            addedVideos: lastChange.added_videos || [],
+            removedVideos: lastChange.removed_videos || [],
+            addedCount: lastChange.added_count || 0,
+            removedCount: lastChange.removed_count || 0,
+            totalAfterChange: lastChange.total_count || 0
+          };
+        }
         
         if (index < 5) {
-          console.log(`  ✓ 客戶 ${index + 1}: ${customer.name} - ${videos.length} 部影片`);
+          const changeInfo = lastChange 
+            ? `+${lastChange.added_count || 0}/-${lastChange.removed_count || 0}` 
+            : '無變更記錄';
+          console.log(`  ✓ 客戶 ${index + 1}: ${customer.name} - 目前 ${videos.length} 部，最近變更: ${changeInfo}`);
         }
         
         return {
@@ -643,9 +665,12 @@ router.get('/customer-lists', requireAuth, async (req, res) => {
             name: customer.name,
             email: customer.email
           },
-          videoCount: videos.length,
-          lastUpdate: lastUpdate,
-          videos: videos
+          currentList: {
+            videoCount: videos.length,
+            videos: videos
+          },
+          lastChange: lastChangeDetails,
+          lastUpdate: lastChange?.snapshot_date || (currentList.length > 0 ? currentList[0]?.added_at : null)
         };
       } catch (error) {
         console.error(`❌ 為客戶 ${customer.name} 組合資料時出錯:`, error);
@@ -655,9 +680,12 @@ router.get('/customer-lists', requireAuth, async (req, res) => {
             name: customer.name,
             email: customer.email
           },
-          videoCount: 0,
-          lastUpdate: null,
-          videos: []
+          currentList: {
+            videoCount: 0,
+            videos: []
+          },
+          lastChange: null,
+          lastUpdate: null
         };
       }
     });
