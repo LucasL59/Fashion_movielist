@@ -570,19 +570,11 @@ router.get('/monthly-summary', requireAuth, async (req, res) => {
     // 獲取所有客戶的當前累積清單
     const { data: currentListData, error: currentListError } = await supabase
       .from('customer_current_list')
-      .select(`
-        customer_id,
-        video_id,
-        added_at,
-        videos:video_id (
-          id,
-          title,
-          title_en,
-          thumbnail_url
-        )
-      `);
+      .select('customer_id, video_id, added_at');
     
     if (currentListError) throw currentListError;
+    
+    console.log(`📊 找到 ${currentListData?.length || 0} 筆累積清單記錄`);
 
     // 按客戶 ID 分組
     const currentListMap = new Map();
@@ -648,6 +640,15 @@ router.get('/monthly-summary', requireAuth, async (req, res) => {
     
     // 獲取所有涉及的影片 ID
     const allVideoIds = new Set();
+    
+    // 從客戶當前清單收集影片 ID
+    (currentListData || []).forEach(item => {
+      if (item.video_id) {
+        allVideoIds.add(item.video_id);
+      }
+    });
+    
+    // 從選擇歷史收集影片 ID
     currentSelections.forEach(sel => {
       (sel.video_ids || []).forEach(id => allVideoIds.add(id));
     });
@@ -696,8 +697,8 @@ router.get('/monthly-summary', requireAuth, async (req, res) => {
       
       const keptIds = currentVideoIds.filter(id => previousVideoIds.includes(id));
       
-      // 組合影片詳情
-      const currentVideos = currentList.map(item => item.videos).filter(Boolean);
+      // 組合影片詳情（從 videosMap 獲取）
+      const currentVideos = currentVideoIds.map(id => videosMap.get(id)).filter(Boolean);
       const previousVideos = previousVideoIds.map(id => videosMap.get(id)).filter(Boolean);
       const keptVideos = keptIds.map(id => videosMap.get(id)).filter(Boolean);
       
