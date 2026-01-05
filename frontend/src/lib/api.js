@@ -462,8 +462,8 @@ export async function getCustomerDashboardStatus(userId) {
 /**
  * 取得管理員/上傳者儀表板概況
  */
-export async function getAdminDashboardOverview(batchId = null) {
-  const params = batchId ? { batchId } : {}
+export async function getAdminDashboardOverview(batchId = null, additionalParams = {}) {
+  const params = batchId ? { batchId, ...additionalParams } : additionalParams
   const response = await api.get('/api/dashboard/admin/overview', { params })
   return response.data
 }

@@ -5,14 +5,14 @@
  */
 
 import { useState, useEffect } from 'react'
-import { AlertCircle, BarChart3, Clock, RefreshCw, Upload, CheckCircle2, Clock3 } from 'lucide-react'
+import { AlertCircle, BarChart3, Clock, RefreshCw, Upload, CheckCircle2, Clock3, Calendar } from 'lucide-react'
 import { getAdminDashboardOverview } from '../lib/api'
 import Select from '../components/Select'
 
 export default function AdminDashboard() {
   const [overviewLoading, setOverviewLoading] = useState(true)
   const [overviewError, setOverviewError] = useState('')
-  const [selectedBatchId, setSelectedBatchId] = useState('')
+  const [selectedMonth, setSelectedMonth] = useState('') // 改為月份篩選
   const [overview, setOverview] = useState({
     latestBatch: null,
     allBatches: [],
@@ -21,23 +21,27 @@ export default function AdminDashboard() {
     submittedCount: 0,
     pendingCount: 0,
     selectionDetails: [],
+    availableMonths: [], // 新增：可用月份列表
   })
   
   useEffect(() => {
     loadDashboardOverview()
   }, [])
   
-  async function loadDashboardOverview(batchId = null) {
+  async function loadDashboardOverview(month = null) {
     try {
       setOverviewLoading(true)
       setOverviewError('')
-      const response = await getAdminDashboardOverview(batchId || selectedBatchId)
+      
+      // 如果指定月份，使用月份篩選；否則不傳參數（顯示當前批次）
+      const params = month || selectedMonth ? { month: month || selectedMonth } : {}
+      const response = await getAdminDashboardOverview(null, params)
       const data = response.data || {}
       setOverview(data)
       
-      // 如果沒有選定批次且載入資料中有當前批次，則設定為當前批次
-      if (!selectedBatchId && !batchId && data.latestBatch) {
-        setSelectedBatchId(data.latestBatch.id)
+      // 如果沒有選定月份且有可用月份，預設選擇最新的月份
+      if (!selectedMonth && !month && data.availableMonths && data.availableMonths.length > 0) {
+        setSelectedMonth(data.availableMonths[0])
       }
     } catch (error) {
       console.error('載入概況失敗:', error)
@@ -47,10 +51,16 @@ export default function AdminDashboard() {
     }
   }
   
-  function handleBatchChange(e) {
-    const newBatchId = e.target.value
-    setSelectedBatchId(newBatchId)
-    loadDashboardOverview(newBatchId)
+  function handleMonthChange(e) {
+    const newMonth = e.target.value
+    setSelectedMonth(newMonth)
+    loadDashboardOverview(newMonth)
+  }
+  
+  function formatMonth(monthStr) {
+    if (!monthStr) return ''
+    const [year, month] = monthStr.split('-')
+    return `${year}年${month}月`
   }
   
   const latestBatch = overview?.latestBatch
@@ -161,18 +171,22 @@ export default function AdminDashboard() {
           </div>
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
-            {allBatches.length > 0 && (
-              <div className="w-full sm:w-48">
-                <Select
-                  value={selectedBatchId}
-                  onChange={handleBatchChange}
-                  options={allBatches.map((batch) => ({
-                    value: batch.id,
-                    label: `${batch.name} ${batch.status === 'active' ? '(當前)' : ''}`
-                  }))}
-                  placeholder="選擇批次"
-                  disabled={overviewLoading}
-                />
+            {/* 月份選擇器 */}
+            {overview.availableMonths && overview.availableMonths.length > 0 && (
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-gray-400" />
+                <div className="w-full sm:w-40">
+                  <Select
+                    value={selectedMonth}
+                    onChange={handleMonthChange}
+                    options={overview.availableMonths.map((month) => ({
+                      value: month,
+                      label: formatMonth(month)
+                    }))}
+                    placeholder="選擇月份"
+                    disabled={overviewLoading}
+                  />
+                </div>
               </div>
             )}
 

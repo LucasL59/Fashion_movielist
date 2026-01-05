@@ -100,10 +100,11 @@ router.get('/customer/:userId', async (req, res) => {
  * GET /api/dashboard/admin/overview
  *
  * 提供管理員/上傳者需要的當月上傳與選擇概況
+ * 支持按月份篩選客戶提交記錄（優先）或按批次 ID（向後兼容）
  */
 router.get('/admin/overview', async (req, res) => {
   try {
-    const { batchId } = req.query;
+    const { batchId, month } = req.query; // month 格式: YYYY-MM
 
     // 取得所有批次列表供選單使用
     const { data: allBatches, error: allBatchesError } = await supabase
@@ -171,7 +172,51 @@ router.get('/admin/overview', async (req, res) => {
       uploaderProfile = uploaderData || null;
     }
 
-    if (targetBatch) {
+    // 如果有指定月份，按月份篩選提交記錄
+    if (month) {
+      console.log(`📅 按月份篩選: ${month}`);
+      
+      // 查詢該月份的所有提交記錄
+      const monthStart = `${month}-01`;
+      const monthEnd = new Date(new Date(monthStart).setMonth(new Date(monthStart).getMonth() + 1)).toISOString().slice(0, 10);
+      
+      const { data: monthlySubmissions, error: monthlyError } = await supabase
+        .from('selection_history')
+        .select('customer_id, snapshot_date, total_count')
+        .gte('snapshot_date', `${monthStart}T00:00:00`)
+        .lt('snapshot_date', `${monthEnd}T00:00:00`)
+        .order('snapshot_date', { ascending: false });
+
+      if (monthlyError) throw monthlyError;
+
+      console.log(`📊 找到 ${monthlySubmissions?.length || 0} 筆 ${month} 的提交記錄`);
+
+      // 為每個客戶找最後一次提交
+      const customerSubmissionMap = new Map();
+      (monthlySubmissions || []).forEach((record) => {
+        if (!customerSubmissionMap.has(record.customer_id)) {
+          customerSubmissionMap.set(record.customer_id, {
+            submittedAt: record.snapshot_date,
+            videoCount: record.total_count || 0
+          });
+        }
+      });
+
+      submittedCount = customerSubmissionMap.size;
+      pendingCount = Math.max(customers.length - submittedCount, 0);
+
+      selectionDetails = customers.map((customer) => {
+        const submission = customerSubmissionMap.get(customer.id);
+        return {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          status: submission ? 'submitted' : 'pending',
+          submittedAt: submission?.submittedAt || null,
+          videoCount: submission?.videoCount || 0,
+        };
+      });
+    } else if (targetBatch) {
       // 使用 customer_current_list 表（累積清單）而非 selections 表（按批次）
       const { data: currentListRows, error: listError } = await supabase
         .from('customer_current_list')
@@ -219,6 +264,29 @@ router.get('/admin/overview', async (req, res) => {
       });
     }
 
+    // 查詢所有有提交記錄的月份（用於前端月份選擇器）
+    const { data: allSubmissions, error: allSubmissionsError } = await supabase
+      .from('selection_history')
+      .select('snapshot_date')
+      .order('snapshot_date', { ascending: false });
+
+    if (allSubmissionsError) {
+      console.error('⚠️ 查詢提交月份失敗:', allSubmissionsError);
+    }
+
+    // 提取唯一的月份列表
+    const availableMonths = [];
+    const seenMonths = new Set();
+    (allSubmissions || []).forEach((record) => {
+      const month = record.snapshot_date.slice(0, 7); // YYYY-MM
+      if (!seenMonths.has(month)) {
+        seenMonths.add(month);
+        availableMonths.push(month);
+      }
+    });
+
+    console.log(`📅 可用月份: ${availableMonths.join(', ')}`);
+
     res.json({
       success: true,
       data: {
@@ -229,6 +297,7 @@ router.get('/admin/overview', async (req, res) => {
         submittedCount,
         pendingCount,
         selectionDetails,
+        availableMonths, // 新增：可用的月份列表
       },
     });
   } catch (error) {

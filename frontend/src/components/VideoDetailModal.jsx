@@ -18,7 +18,7 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
         onClick={onClose}
       />
       
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
         {/* 關閉按鈕 */}
         <button
           onClick={onClose}
@@ -27,24 +27,26 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
           <X className="h-5 w-5" />
         </button>
 
-        {/* 影片封面 */}
-        <div className="relative aspect-[16/9] bg-gray-100">
-          {video.thumbnail_url ? (
-            <img
-              src={video.thumbnail_url}
-              alt={video.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center">
-              <Film className="h-16 w-16 text-gray-400" />
-            </div>
-          )}
-          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 to-transparent p-6">
-            <h2 className="text-2xl font-bold text-white mb-1">{video.title}</h2>
-            {video.title_en && (
-              <p className="text-white/90 text-sm">{video.title_en}</p>
+        {/* 影片封面 - 使用 2:3 比例（海報比例）*/}
+        <div className="relative w-full flex justify-center bg-gradient-to-b from-gray-900 to-gray-800">
+          <div className="relative w-2/3 max-w-sm aspect-[2/3] bg-gray-100">
+            {video.thumbnail_url ? (
+              <img
+                src={video.thumbnail_url}
+                alt={video.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <Film className="h-16 w-16 text-gray-400" />
+              </div>
             )}
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4">
+              <h2 className="text-xl font-bold text-white mb-1 leading-tight">{video.title}</h2>
+              {video.title_en && (
+                <p className="text-white/90 text-xs">{video.title_en}</p>
+              )}
+            </div>
           </div>
         </div>
 
