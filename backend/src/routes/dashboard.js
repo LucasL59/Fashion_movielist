@@ -6,6 +6,7 @@
 
 import express from 'express';
 import { supabase } from '../config/supabase.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -16,7 +17,7 @@ const router = express.Router();
  * 
  * 注意：現在使用 customer_current_list 表（累積清單）而非 selections 表（批次選擇）
  */
-router.get('/customer/:userId', async (req, res) => {
+router.get('/customer/:userId', requireAuth, async (req, res) => {
   const { userId } = req.params;
 
   try {
@@ -102,7 +103,7 @@ router.get('/customer/:userId', async (req, res) => {
  * 提供管理員/上傳者需要的當月上傳與選擇概況
  * 支持按月份篩選客戶提交記錄（優先）或按批次 ID（向後兼容）
  */
-router.get('/admin/overview', async (req, res) => {
+router.get('/admin/overview', requireAuth, requireRoles(['admin', 'uploader']), async (req, res) => {
   try {
     const { batchId, month } = req.query; // month 格式: YYYY-MM
 
