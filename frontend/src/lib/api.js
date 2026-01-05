@@ -5,6 +5,7 @@
  */
 
 import axios from 'axios'
+import { supabase } from './supabase'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -15,30 +16,32 @@ const api = axios.create({
   },
 })
 
-function getAccessToken() {
+/**
+ * 從 Supabase 獲取當前的 access token
+ * 使用 Supabase SDK 的 getSession() 方法，確保獲取到最新且有效的 token
+ */
+async function getAccessToken() {
   if (typeof window === 'undefined') return null
 
-  const authKey = Object.keys(localStorage).find((key) => key.includes('auth-token')) || 'supabase.auth.token'
-  const raw = localStorage.getItem(authKey)
-
-  if (!raw) return null
-
   try {
-    const parsed = JSON.parse(raw)
-    return (
-      parsed?.currentSession?.access_token ||
-      parsed?.session?.access_token ||
-      parsed?.access_token ||
-      null
-    )
+    const { data: { session }, error } = await supabase.auth.getSession()
+    
+    if (error) {
+      console.warn('⚠️ 獲取 Supabase session 失敗:', error.message)
+      return null
+    }
+    
+    return session?.access_token || null
   } catch (error) {
+    console.error('❌ 獲取 access token 時發生錯誤:', error)
     return null
   }
 }
 
 // 請求攔截器（添加認證 token 和禁用緩存）
-api.interceptors.request.use((config) => {
-  const token = getAccessToken()
+api.interceptors.request.use(async (config) => {
+  // 從 Supabase 獲取最新的 access token
+  const token = await getAccessToken()
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }

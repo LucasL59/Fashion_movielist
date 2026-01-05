@@ -133,7 +133,7 @@ export default function CustomerDashboard() {
                 </p>
                 <p className="text-sm text-gray-500">
                   {hasSelection
-                    ? `共選擇 ${selection?.video_ids?.length || 0} 部影片`
+                    ? `共選擇 ${status?.customerListCount || selection?.total_count || selection?.video_ids?.length || 0} 部影片`
                     : latestBatch
                       ? '完成選擇後才會寄出通知'
                       : '請等待新的清單'}

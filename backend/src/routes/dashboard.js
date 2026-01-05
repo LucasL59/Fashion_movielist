@@ -13,6 +13,8 @@ const router = express.Router();
  * GET /api/dashboard/customer/:userId
  *
  * 提供客戶儀表板需要的最新批次與選擇狀態
+ * 
+ * 注意：現在使用 customer_current_list 表（累積清單）而非 selections 表（批次選擇）
  */
 router.get('/customer/:userId', async (req, res) => {
   const { userId } = req.params;
@@ -31,23 +33,11 @@ router.get('/customer/:userId', async (req, res) => {
       throw batchError;
     }
 
-    let selection = null;
     let totalVideos = 0;
+    let customerListCount = 0;
 
     if (latestBatch) {
-      const { data: selectionData, error: selectionError } = await supabase
-        .from('selections')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('batch_id', latestBatch.id)
-        .maybeSingle();
-
-      if (selectionError && selectionError.code !== 'PGRST116') {
-        throw selectionError;
-      }
-
-      selection = selectionData || null;
-
+      // 計算該批次的影片總數
       const { count, error: countError } = await supabase
         .from('videos')
         .select('*', { head: true, count: 'exact' })
@@ -57,14 +47,44 @@ router.get('/customer/:userId', async (req, res) => {
       totalVideos = count || 0;
     }
 
+    // 查詢客戶當前的累積清單（不限批次）
+    const { count: listCount, error: listError } = await supabase
+      .from('customer_current_list')
+      .select('*', { head: true, count: 'exact' })
+      .eq('customer_id', userId);
+
+    if (listError) throw listError;
+    customerListCount = listCount || 0;
+
+    // 查詢最後一次提交記錄（從 selection_history）
+    const { data: lastSubmission, error: historyError } = await supabase
+      .from('selection_history')
+      .select('*')
+      .eq('customer_id', userId)
+      .order('snapshot_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (historyError && historyError.code !== 'PGRST116') {
+      throw historyError;
+    }
+
+    // hasSelection 表示客戶是否有累積清單
+    const hasSelection = customerListCount > 0;
+
     res.json({
       success: true,
       data: {
         latestBatch: latestBatch || null,
         totalVideos,
-        hasSelection: Boolean(selection),
-        selection,
-        hasNewBatch: Boolean(latestBatch) && !selection,
+        hasSelection,
+        selection: lastSubmission ? {
+          video_ids: lastSubmission.video_ids || [],
+          created_at: lastSubmission.snapshot_date,
+          total_count: lastSubmission.total_count || 0,
+        } : null,
+        customerListCount,
+        hasNewBatch: Boolean(latestBatch),
       },
     });
   } catch (error) {

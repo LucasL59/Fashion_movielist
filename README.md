@@ -1,6 +1,6 @@
 # 每月影片選擇系統 (Monthly Movie Selection System)
 
-> **版本**：v3.0.4 ｜ **最後更新**：2026-01-03 ｜ **狀態**：✅ 可部署、可測試、已優化
+> **版本**：v3.0.6 ｜ **最後更新**：2026-01-05 ｜ **狀態**：✅ 可部署、可測試、已優化
 
 ## 🔰 專案簡介
 
@@ -37,11 +37,61 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 - 完整影片編輯流程：Admin/Uploader 可即時更新影片資訊與封面
 - BrandTransition + Glassmorphism UI，確保登入/登出體驗與主要頁面動線一致
 
+## 🆕 2026-01-05 更新重點
+
+> 完整說明請見相關技術文檔
+
+### v3.0.6 客戶清單功能修正 🛠️
+
+- **🐛 修正「我的清單」顯示空白問題**：
+  - 修正前端資料結構映射錯誤
+  - `customerList` 已是攤平的影片物件，移除多餘的 `.videos` 映射
+  - 確保客戶可以正確查看自己的累積清單
+  
+- **🐛 修正取消影片後沒有更新的問題**：
+  - 修正 `removedVideos` 過濾邏輯錯誤
+  - 使用正確的 `item.id` 而非不存在的 `item.video_id`
+  - 確保新增/移除影片後正確更新數量
+  
+- **🐛 修正儀表板狀態錯誤**：
+  - 修正後端查詢錯誤的資料表（`selections` → `customer_current_list`）
+  - 改用累積清單架構查詢客戶選擇狀態
+  - 從 `selection_history` 獲取最後提交記錄
+  - 添加 `customerListCount` 欄位以正確顯示數量
+  
+- **📝 文檔更新**：
+  - [FIX_CUSTOMER_LIST_ISSUES.md](FIX_CUSTOMER_LIST_ISSUES.md) - 客戶清單問題修正詳細說明 ⭐
+  - [QUICK_FIX_GUIDE_v3.0.6.md](QUICK_FIX_GUIDE_v3.0.6.md) - 快速修正指南
+
+### v3.0.5 認證系統修正 🔒
+
+- **🐛 修正 401 錯誤**：
+  - 修正前端 API token 獲取方式，使用 Supabase SDK 的 `getSession()` 方法
+  - 解決客戶清單載入和提交時的認證失敗問題（`GET /api/customer-list/:id` 和 `POST /api/customer-list/:id/update`）
+  - 確保所有需要認證的 API 端點都能正確獲取和傳遞 access token
+  - 支援 token 自動刷新，避免過期導致的 401 錯誤
+  
+- **🔧 技術改進**：
+  - 請求攔截器改為非同步（async），確保在獲取 token 後才發送請求
+  - 統一認證邏輯，與 AuthContext 保持一致
+  - 移除不可靠的 localStorage key 查找方式
+  - 添加詳細的錯誤日誌，便於除錯
+
+- **📝 文檔更新**：
+  - [FIX_401_AUTH_ERRORS.md](FIX_401_AUTH_ERRORS.md) - 認證錯誤修正詳細說明
+  - [QUICK_DEPLOY_FIX.md](QUICK_DEPLOY_FIX.md) - 快速部署指南
+
 ## 🆕 2026-01-03 更新重點
 
 > 完整說明請見相關技術文檔
 
 ### v3.0.4 資料庫性能優化 & 資料品質修正 ⚡
+
+- **🚨 緊急修復：循環依賴問題（2026-01-03）**：
+  - 修復 RLS policy 循環依賴導致的登入問題（500 錯誤）
+  - 創建 `is_admin()` 輔助函數避免查詢 profiles 表本身
+  - 所有權限檢查改為直接查詢 `auth.users.raw_user_meta_data`
+  - 系統已恢復正常，登入功能完全正常 ✅
 
 - **🚀 RLS 性能大幅提升**：
   - 修復所有 29 個 "Auth RLS Initialization Plan" 警告
@@ -67,9 +117,10 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
   - 防止將來從 Excel 上傳時帶入空格導致跨月份選擇無法識別
   
 - **📝 完整文檔**：
-  - 詳見 [RLS_PERFORMANCE_FIX_SUMMARY.md](RLS_PERFORMANCE_FIX_SUMMARY.md) 
+  - 性能優化 [RLS_PERFORMANCE_FIX_SUMMARY.md](RLS_PERFORMANCE_FIX_SUMMARY.md) 
   - 驗證報告 [VERIFICATION_REPORT_RLS_FIX.md](VERIFICATION_REPORT_RLS_FIX.md)
-  - Migration 腳本 [database/migration_fix_rls_performance.sql](database/migration_fix_rls_performance.sql)
+  - 緊急修復 [EMERGENCY_FIX_CIRCULAR_DEPENDENCY.md](EMERGENCY_FIX_CIRCULAR_DEPENDENCY.md) 🚨
+  - Migration 腳本：[migration_fix_rls_performance.sql](database/migration_fix_rls_performance.sql) + [migration_fix_rls_circular_dependency.sql](database/migration_fix_rls_circular_dependency.sql)
 
 ### v3.0.3 跨月份選擇同步修正 🔧
 
@@ -512,13 +563,15 @@ values (
 
 ## 📈 專案狀態與聯絡
 
-- **版本**：v3.0.4 （2026-01-03 更新）
-- **程式碼行數**：~7,600 行 ｜ **文件字數**：~42,000 字
+- **版本**：v3.0.6 （2026-01-05 更新）
+- **程式碼行數**：~7,600 行 ｜ **文件字數**：~45,000 字
 - **里程碑**：
   - ✅ 三層權限、用戶管理、操作紀錄、提醒設定
   - ✅ 影片選擇系統 v3 重構（跨月份選擇、待處理變更追蹤）
   - ✅ **跨月份選擇同步修正**（使用標題識別，真正實現跨月份同步） ⭐ v3.0.3
   - ✅ **資料品質修正**（清理空格、加入 trim() 防護，100% 準確識別） ⭐ v3.0.4
+  - ✅ **認證系統修正**（修正 401 錯誤，確保 API token 正確傳遞） ⭐ v3.0.5
+  - ✅ **客戶清單功能修正**（顯示、更新、儀表板狀態全面修正） ⭐ v3.0.6
   - ✅ UI/UX 全面優化（毛玻璃效果、主題色統一、視圖切換）
   - ✅ 關鍵 Bug 修正（API 格式、事件處理、Toast 訊息）
   - ✅ 郵件通知開關管理（可控制自動郵件功能）

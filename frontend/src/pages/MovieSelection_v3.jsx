@@ -335,9 +335,9 @@ export default function MovieSelection() {
       new Map(addedVideos.map(v => [v.title?.trim() || v.title, v])).values()
     )
     
+    // customerList 已經是攤平的影片物件，直接使用 item.id
     const removedVideos = customerList
-      .filter(item => pendingChanges.remove.has(item.video_id))
-      .map(item => item.videos)
+      .filter(item => pendingChanges.remove.has(item.id))
       .filter(Boolean)
     
     const currentTotal = customerListIds.size
@@ -431,8 +431,9 @@ export default function MovieSelection() {
   
   const hasPendingChanges = pendingChanges.add.size > 0 || pendingChanges.remove.size > 0
   
+  // customerList 已經是攤平的影片物件陣列，不需要再映射 .videos
   const ownedVideosForDisplay = useMemo(() => {
-    return customerList.map(item => item.videos).filter(Boolean)
+    return customerList.filter(Boolean)
   }, [customerList])
   
   // ==================== 渲染 ====================
