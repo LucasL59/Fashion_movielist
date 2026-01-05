@@ -5,7 +5,6 @@
  */
 
 import axios from 'axios'
-import { supabase } from './supabase'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
@@ -18,12 +17,14 @@ const api = axios.create({
 
 /**
  * 從 Supabase 獲取當前的 access token
- * 使用 Supabase SDK 的 getSession() 方法，確保獲取到最新且有效的 token
+ * 動態導入避免循環依賴
  */
 async function getAccessToken() {
   if (typeof window === 'undefined') return null
 
   try {
+    // 動態導入 supabase，避免循環依賴
+    const { supabase } = await import('./supabase')
     const { data: { session }, error } = await supabase.auth.getSession()
     
     if (error) {
@@ -39,20 +40,30 @@ async function getAccessToken() {
 }
 
 // 請求攔截器（添加認證 token 和禁用緩存）
-api.interceptors.request.use(async (config) => {
-  // 從 Supabase 獲取最新的 access token
-  const token = await getAccessToken()
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
+api.interceptors.request.use(
+  async (config) => {
+    try {
+      // 從 Supabase 獲取最新的 access token
+      const token = await getAccessToken()
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      }
+    } catch (error) {
+      console.error('❌ 請求攔截器錯誤:', error)
+      // 即使獲取 token 失敗，仍然繼續請求
+    }
+    
+    // 禁用緩存以避免 304 Not Modified 問題
+    config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    config.headers['Pragma'] = 'no-cache'
+    config.headers['Expires'] = '0'
+    
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
   }
-  
-  // 禁用緩存以避免 304 Not Modified 問題
-  config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-  config.headers['Pragma'] = 'no-cache'
-  config.headers['Expires'] = '0'
-  
-  return config
-})
+)
 
 // 響應攔截器（統一錯誤處理）
 api.interceptors.response.use(
