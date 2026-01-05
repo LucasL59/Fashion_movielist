@@ -467,10 +467,17 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
     // 前端已處理好新增和移除的影片清單（使用標題去重）
     console.log(`📊 [notifyAdminCustomerSelection] 清單統計: 總數 ${totalCount}, 新增 ${addedVideos.length}, 移除 ${removedVideos.length}`);
     
-    // 建立新增影片清單 HTML
+    // 建立新增影片清單 HTML（包含月份信息）
     let addedSectionHtml = '';
     if (addedVideos.length > 0) {
       const addedListHtml = addedVideos.map((video, index) => {
+        // 格式化月份顯示（例如：2025-12 → 2025年12月）
+        let monthDisplay = '';
+        if (video.month && video.month !== 'Unknown') {
+          const [year, month] = video.month.split('-');
+          monthDisplay = `<span style="background: #dbeafe; color: #1e40af; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 6px;">${year}年${month}月</span>`;
+        }
+        
         return `
         <tr style="border-bottom: 1px solid #eee;">
           <td style="padding: 16px 12px; color: #999; font-size: 14px;">${String(index + 1).padStart(2, '0')}</td>
@@ -478,6 +485,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
             <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">
               ${video.title}
               <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">新增</span>
+              ${monthDisplay}
             </div>
             <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
           </td>
@@ -489,6 +497,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
         <div style="margin-bottom: 24px;">
           <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #10b981;">
             ✅ 新增影片（共 ${addedVideos.length} 部）
+            <span style="font-size: 12px; color: #666; font-weight: 400; margin-left: 8px;">（藍色標籤為影片來源月份）</span>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
             <thead>
@@ -505,10 +514,17 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
       `;
     }
     
-    // 建立移除影片清單 HTML
+    // 建立移除影片清單 HTML（包含月份信息）
     let removedSectionHtml = '';
     if (removedVideos.length > 0) {
       const removedListHtml = removedVideos.map((video, index) => {
+        // 格式化月份顯示（例如：2025-12 → 2025年12月）
+        let monthDisplay = '';
+        if (video.month && video.month !== 'Unknown') {
+          const [year, month] = video.month.split('-');
+          monthDisplay = `<span style="background: #fee2e2; color: #991b1b; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 6px;">${year}年${month}月</span>`;
+        }
+        
         return `
         <tr style="border-bottom: 1px solid #eee; opacity: 0.7;">
           <td style="padding: 16px 12px; color: #999; font-size: 14px;">${String(index + 1).padStart(2, '0')}</td>
@@ -516,6 +532,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
             <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">
               ${video.title}
               <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">移除</span>
+              ${monthDisplay}
             </div>
             <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
           </td>
@@ -527,6 +544,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
         <div style="margin-bottom: 24px;">
           <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #ef4444;">
             ❌ 移除影片（共 ${removedVideos.length} 部）
+            <span style="font-size: 12px; color: #666; font-weight: 400; margin-left: 8px;">（紅色標籤為影片原本來源月份）</span>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
             <thead>

@@ -272,23 +272,103 @@ router.post('/:customerId/submit', requireAuth, async (req, res) => {
 
     console.log(`✅ [customer-list] 提交成功，已記錄歷史快照`);
 
-    // 發送通知
+    // 發送通知（附加月份信息）
     try {
       const customerName = authProfile?.name || authUser?.email || '客戶';
       const customerEmail = authProfile?.email || authUser?.email;
       
+      // 查詢新增影片的月份信息（從 customer_current_list）
+      let enrichedAddedVideos = [...addedVideos];
+      if (addedVideos.length > 0) {
+        const addedVideoIds = addedVideos.map(v => v.video_id).filter(Boolean);
+        
+        const { data: addedListItems, error: addedListError } = await supabase
+          .from('customer_current_list')
+          .select('video_id, added_from_month, videos:video_id(batch_id, batches:batch_id(month))')
+          .eq('customer_id', customerId)
+          .in('video_id', addedVideoIds);
+        
+        if (!addedListError && addedListItems) {
+          const monthMap = new Map();
+          addedListItems.forEach(item => {
+            const month = item.added_from_month || item.videos?.batches?.month;
+            if (month) {
+              monthMap.set(item.video_id, month);
+            }
+          });
+          
+          enrichedAddedVideos = addedVideos.map(video => ({
+            ...video,
+            month: monthMap.get(video.video_id) || 'Unknown'
+          }));
+          
+          console.log(`📅 [customer-list] 已獲取 ${enrichedAddedVideos.length} 部新增影片的月份信息`);
+        }
+      }
+      
+      // 查詢移除影片的月份信息（從已移除的清單或 selection_history）
+      let enrichedRemovedVideos = [...removedVideos];
+      if (removedVideos.length > 0) {
+        const removedVideoIds = removedVideos.map(v => v.video_id).filter(Boolean);
+        
+        // 從最近的歷史記錄中查找（因為已經從 current_list 移除了）
+        const { data: historyRecords, error: historyError } = await supabase
+          .from('selection_history')
+          .select('video_ids, added_videos')
+          .eq('customer_id', customerId)
+          .order('snapshot_date', { ascending: false })
+          .limit(10); // 查最近 10 條記錄
+        
+        const removedMonthMap = new Map();
+        
+        if (!historyError && historyRecords && historyRecords.length > 0) {
+          // 從歷史記錄中找出移除影片之前的月份信息
+          historyRecords.forEach(record => {
+            if (record.added_videos && Array.isArray(record.added_videos)) {
+              record.added_videos.forEach(video => {
+                if (removedVideoIds.includes(video.video_id) && video.month) {
+                  removedMonthMap.set(video.video_id, video.month);
+                }
+              });
+            }
+          });
+        }
+        
+        // 如果歷史記錄中沒有，嘗試從 videos 表中獲取批次月份
+        if (removedMonthMap.size < removedVideoIds.length) {
+          const { data: videosBatch, error: videosBatchError } = await supabase
+            .from('videos')
+            .select('id, batch_id, batches:batch_id(month)')
+            .in('id', removedVideoIds);
+          
+          if (!videosBatchError && videosBatch) {
+            videosBatch.forEach(video => {
+              if (!removedMonthMap.has(video.id) && video.batches?.month) {
+                removedMonthMap.set(video.id, video.batches.month);
+              }
+            });
+          }
+        }
+        
+        enrichedRemovedVideos = removedVideos.map(video => ({
+          ...video,
+          month: removedMonthMap.get(video.video_id) || 'Unknown'
+        }));
+        
+        console.log(`📅 [customer-list] 已獲取 ${enrichedRemovedVideos.length} 部移除影片的月份信息`);
+      }
+      
       // 準備郵件通知資料
-      // addedVideos 和 removedVideos 已經是前端處理好的完整影片資料（已去重）
       const emailData = {
         customerId,
         customerName,
         customerEmail,
         totalCount: videoIds.length,
-        addedVideos,  // 前端已使用標題去重
-        removedVideos // 前端已處理
+        addedVideos: enrichedAddedVideos,  // 包含月份信息
+        removedVideos: enrichedRemovedVideos // 包含月份信息
       };
       
-      console.log(`📧 [customer-list] 準備發送通知: 新增 ${addedVideos.length} 部, 移除 ${removedVideos.length} 部`);
+      console.log(`📧 [customer-list] 準備發送通知: 新增 ${enrichedAddedVideos.length} 部, 移除 ${enrichedRemovedVideos.length} 部`);
       
       await notifyAdminCustomerSelection(emailData);
       
