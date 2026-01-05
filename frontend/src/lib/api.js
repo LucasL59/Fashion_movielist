@@ -495,11 +495,17 @@ export async function recordOperationEvent(payload) {
 }
 
 /**
- * 取得指定月份所有客戶的選擇摘要（僅管理員）
+ * 取得所有客戶的當前清單總覽（v3 累積清單架構）
  */
-export async function getMonthlySelectionSummary(month) {
-  const response = await api.get('/api/selections/monthly-summary', { params: { month } })
+export async function getCustomerListsOverview() {
+  const response = await api.get('/api/selections/customer-lists')
   return response.data
+}
+
+// 向後兼容：保留舊函數名稱
+export async function getMonthlySelectionSummary(month) {
+  // v3 不再按月份查詢，直接返回所有客戶清單
+  return getCustomerListsOverview()
 }
 
 export default api

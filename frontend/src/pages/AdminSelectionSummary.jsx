@@ -1,7 +1,8 @@
 /**
- * 管理員已選片單摘要頁面
+ * 客戶清單總覽頁面（v3 累積清單架構）
  * 
- * 顯示指定月份所有客戶的選擇清單與異動
+ * 顯示所有客戶的當前累積清單
+ * 不再按月份劃分，每個客戶維護一份持續更新的清單
  */
 
 import { useState, useEffect } from 'react'
@@ -67,10 +68,36 @@ export default function AdminSelectionSummary() {
     try {
       setLoading(true)
       const response = await getMonthlySelectionSummary(selectedMonth)
-      setSummaryData(response.data)
+      
+      // v3 API 返回 customerLists 而非 summaries
+      if (response.data.customerLists) {
+        // 轉換為舊格式以保持前端兼容
+        setSummaryData({
+          ...response.data,
+          summaries: response.data.customerLists.map(list => ({
+            customer: list.customer,
+            currentSelection: list.videoCount > 0 ? {
+              videoCount: list.videoCount,
+              submittedAt: list.lastUpdate,
+              videos: list.videos
+            } : null,
+            previousSelection: null,
+            diff: {
+              added: [],
+              removed: [],
+              kept: list.videos || [],
+              addedCount: 0,
+              removedCount: 0,
+              keptCount: list.videoCount
+            }
+          }))
+        })
+      } else {
+        setSummaryData(response.data)
+      }
     } catch (error) {
-      console.error('載入摘要失敗:', error)
-      showToast('載入摘要失敗，請稍後再試', 'error')
+      console.error('載入清單失敗:', error)
+      showToast('載入清單失敗，請稍後再試', 'error')
     } finally {
       setLoading(false)
     }
@@ -124,8 +151,8 @@ export default function AdminSelectionSummary() {
     <div className="space-y-8">
       {/* 標題 */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">已選片單總覽</h1>
-        <p className="text-gray-600 mt-2">查看各客戶的月份選擇與異動明細</p>
+        <h1 className="text-3xl font-bold text-gray-900">客戶清單總覽</h1>
+        <p className="text-gray-600 mt-2">查看所有客戶的當前累積清單（v3 架構：不再按月份劃分）</p>
       </div>
       
       {/* 控制列 */}
