@@ -15,10 +15,10 @@ export default defineConfig({
     emptyOutDir: true,
     rollupOptions: {
       output: {
-        // 強制使用唯一的文件名（添加構建時間戳到 hash）
-        entryFileNames: 'assets/[name].[hash].v20260102.js',
-        chunkFileNames: 'assets/[name].[hash].v20260102.js',
-        assetFileNames: 'assets/[name].[hash].[ext]'
+        // 使用標準的 Vite hash 機制，不硬編碼日期
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]'
       }
     }
   },

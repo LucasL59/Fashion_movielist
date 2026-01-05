@@ -11,7 +11,11 @@
       "headers": [
         {
           "key": "X-App-Version",
-          "value": "1.0.1.1-20260102-2235"
+          "value": "3.2.6"
+        },
+        {
+          "key": "Cache-Control",
+          "value": "no-cache, no-store, must-revalidate"
         }
       ]
     }
