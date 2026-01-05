@@ -18,7 +18,7 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
         onClick={onClose}
       />
       
-      <div className="relative bg-white rounded-3xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="relative bg-white rounded-3xl shadow-2xl max-w-xl w-full max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
         {/* 關閉按鈕 */}
         <button
           onClick={onClose}
@@ -28,21 +28,21 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
         </button>
 
         {/* 影片封面 - 使用 2:3 比例（海報比例）*/}
-        <div className="relative w-full flex justify-center bg-gradient-to-b from-gray-900 to-gray-800">
-          <div className="relative w-2/3 max-w-sm aspect-[2/3] bg-gray-100">
+        <div className="relative w-full bg-gradient-to-b from-gray-900 to-gray-800 py-6 flex justify-center">
+          <div className="relative w-3/5 max-w-xs aspect-[2/3] bg-gray-100 rounded-lg overflow-hidden shadow-2xl">
             {video.thumbnail_url ? (
               <img
                 src={video.thumbnail_url}
                 alt={video.title}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-contain bg-gray-900"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
+              <div className="w-full h-full flex items-center justify-center bg-gray-900">
                 <Film className="h-16 w-16 text-gray-400" />
               </div>
             )}
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 to-transparent p-4">
-              <h2 className="text-xl font-bold text-white mb-1 leading-tight">{video.title}</h2>
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent p-4">
+              <h2 className="text-lg font-bold text-white mb-1 leading-tight">{video.title}</h2>
               {video.title_en && (
                 <p className="text-white/90 text-xs">{video.title_en}</p>
               )}
@@ -50,8 +50,9 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
           </div>
         </div>
 
-        {/* 影片詳細資訊 */}
-        <div className="p-6 space-y-4 overflow-y-auto max-h-[40vh]">
+        {/* 影片詳細資訊 - 可滾動區域 */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="p-6 space-y-4">
           {/* 簡介 */}
           {video.description && (
             <div>
@@ -75,18 +76,19 @@ export default function VideoDetailModal({ video, onClose, onAction, actionLabel
             </div>
           )}
 
-          {/* 如果沒有簡介 */}
-          {!video.description && !video.description_en && (
-            <div className="text-center py-8 text-gray-400">
-              <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
-              <p>此影片尚無詳細簡介</p>
-            </div>
-          )}
+            {/* 如果沒有簡介 */}
+            {!video.description && !video.description_en && (
+              <div className="text-center py-8 text-gray-400">
+                <Film className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p>此影片尚無詳細簡介</p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* 操作按鈕 */}
         {onAction && (
-          <div className="p-4 bg-gray-50 border-t border-gray-100">
+          <div className="p-4 bg-gray-50 border-t border-gray-100 flex-shrink-0">
             <button
               onClick={() => {
                 onAction(video);
