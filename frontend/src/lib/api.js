@@ -18,6 +18,7 @@ const api = axios.create({
 /**
  * 從 Supabase 獲取當前的 access token
  * 動態導入避免循環依賴
+ * v3.2.6 - 添加詳細調試日誌
  */
 async function getAccessToken() {
   if (typeof window === 'undefined') return null
@@ -28,18 +29,25 @@ async function getAccessToken() {
     const { data: { session }, error } = await supabase.auth.getSession()
     
     if (error) {
-      console.warn('⚠️ 獲取 Supabase session 失敗:', error.message)
+      console.warn('⚠️ [API v3.2.6] 獲取 Supabase session 失敗:', error.message)
       return null
     }
     
+    if (!session) {
+      console.log('⚠️ [API v3.2.6] 無 session - 用戶可能未登入')
+      return null
+    }
+    
+    console.log('✅ [API v3.2.6] 成功獲取 token, user:', session.user?.email)
     return session?.access_token || null
   } catch (error) {
-    console.error('❌ 獲取 access token 時發生錯誤:', error)
+    console.error('❌ [API v3.2.6] 獲取 access token 時發生錯誤:', error)
     return null
   }
 }
 
 // 請求攔截器（添加認證 token 和禁用緩存）
+// v3.2.6 - 添加詳細調試日誌
 api.interceptors.request.use(
   async (config) => {
     try {
@@ -47,9 +55,12 @@ api.interceptors.request.use(
       const token = await getAccessToken()
       if (token) {
         config.headers.Authorization = `Bearer ${token}`
+        console.log(`🔐 [API v3.2.6] 請求 ${config.url} 已添加 token`)
+      } else {
+        console.warn(`⚠️ [API v3.2.6] 請求 ${config.url} 無 token - 可能導致 401`)
       }
     } catch (error) {
-      console.error('❌ 請求攔截器錯誤:', error)
+      console.error('❌ [API v3.2.6] 請求攔截器錯誤:', error)
       // 即使獲取 token 失敗，仍然繼續請求
     }
     
