@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 import Select from '../components/Select'
 import SelectionDiffSection from '../components/SelectionDiffSection'
-import { supabase } from '../lib/supabase'
+import { getCustomerListHistory } from '../lib/api'
 
 export default function SelectionHistory() {
   const { user } = useAuth()
@@ -28,26 +28,21 @@ export default function SelectionHistory() {
   const [selectedMonthKey, setSelectedMonthKey] = useState('')
 
   useEffect(() => {
-    if (user) {
+    if (user?.id) {
       loadSelections()
     }
-  }, [user])
+  }, [user?.id])
 
   async function loadSelections() {
     try {
       setLoading(true)
       setError('')
 
-      // 獲取用戶的選擇歷史記錄（從 selection_history 表）
-      const { data: selectionsData, error: selectionsError } = await supabase
-        .from('selection_history')
-        .select('*')
-        .eq('customer_id', user.id)
-        .order('snapshot_date', { ascending: false })
+      // 獲取用戶的選擇歷史記錄（使用 API）
+      const response = await getCustomerListHistory(user.id, 50)
+      const selectionsData = response.data || []
 
-      if (selectionsError) throw selectionsError
-
-      console.log(`📊 找到 ${selectionsData?.length || 0} 筆選擇歷史記錄`)
+      console.log(`📊 找到 ${selectionsData.length} 筆選擇歷史記錄`)
 
       // selection_history 已包含影片詳情，直接處理
       const videoCache = new Map()
