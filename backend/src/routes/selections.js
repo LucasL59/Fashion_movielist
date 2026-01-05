@@ -567,39 +567,83 @@ router.get('/monthly-summary', requireAuth, async (req, res) => {
       });
     }
     
-    // 批次獲取當前月份的所有選擇
+    // 獲取所有客戶的當前累積清單
+    const { data: currentListData, error: currentListError } = await supabase
+      .from('customer_current_list')
+      .select(`
+        customer_id,
+        video_id,
+        added_at,
+        videos:video_id (
+          id,
+          title,
+          title_en,
+          thumbnail_url
+        )
+      `);
+    
+    if (currentListError) throw currentListError;
+
+    // 按客戶 ID 分組
+    const currentListMap = new Map();
+    (currentListData || []).forEach(item => {
+      if (!currentListMap.has(item.customer_id)) {
+        currentListMap.set(item.customer_id, []);
+      }
+      currentListMap.get(item.customer_id).push(item);
+    });
+
+    // 獲取當前月份的選擇歷史快照（用於比對）
     let currentSelections = [];
     if (currentBatch) {
       const { data, error } = await supabase
-        .from('selections')
-        .select('user_id, video_ids, created_at')
-        .eq('batch_id', currentBatch.id);
+        .from('selection_history')
+        .select('customer_id, video_ids, added_videos, removed_videos, snapshot_date, month')
+        .eq('month', month)
+        .order('snapshot_date', { ascending: false });
       
       if (error) throw error;
-      currentSelections = data || [];
+      
+      // 只保留每個客戶的最新記錄
+      const latestMap = new Map();
+      (data || []).forEach(record => {
+        if (!latestMap.has(record.customer_id)) {
+          latestMap.set(record.customer_id, record);
+        }
+      });
+      currentSelections = Array.from(latestMap.values());
     }
     
-    // 批次獲取上一個月份的所有選擇
+    // 獲取上一個月份的選擇歷史快照
     let previousSelections = [];
     if (previousBatch) {
       const { data, error } = await supabase
-        .from('selections')
-        .select('user_id, video_ids, created_at')
-        .eq('batch_id', previousBatch.id);
+        .from('selection_history')
+        .select('customer_id, video_ids, snapshot_date, month')
+        .eq('month', prevMonth)
+        .order('snapshot_date', { ascending: false });
       
       if (error) throw error;
-      previousSelections = data || [];
+      
+      // 只保留每個客戶的最新記錄
+      const latestMap = new Map();
+      (data || []).forEach(record => {
+        if (!latestMap.has(record.customer_id)) {
+          latestMap.set(record.customer_id, record);
+        }
+      });
+      previousSelections = Array.from(latestMap.values());
     }
     
-    // 建立選擇的 Map 以便快速查找
+    // 建立選擇的 Map 以便快速查找（使用 customer_id 而非 user_id）
     const currentSelectionsMap = new Map();
     currentSelections.forEach(sel => {
-      currentSelectionsMap.set(sel.user_id, sel);
+      currentSelectionsMap.set(sel.customer_id, sel);
     });
     
     const previousSelectionsMap = new Map();
     previousSelections.forEach(sel => {
-      previousSelectionsMap.set(sel.user_id, sel);
+      previousSelectionsMap.set(sel.customer_id, sel);
     });
     
     // 獲取所有涉及的影片 ID
@@ -630,20 +674,31 @@ router.get('/monthly-summary', requireAuth, async (req, res) => {
     const summaries = customers.map(customer => {
       const currentSelection = currentSelectionsMap.get(customer.id);
       const previousSelection = previousSelectionsMap.get(customer.id);
+      const currentList = currentListMap.get(customer.id) || [];
       
-      const currentVideoIds = currentSelection?.video_ids || [];
+      const currentVideoIds = currentList.map(item => item.video_id);
       const previousVideoIds = previousSelection?.video_ids || [];
       
-      // 計算差異
-      const addedIds = currentVideoIds.filter(id => !previousVideoIds.includes(id));
-      const removedIds = previousVideoIds.filter(id => !currentVideoIds.includes(id));
+      // 如果有當前月份的歷史快照，優先使用快照中的差異資訊
+      let addedVideos = [];
+      let removedVideos = [];
+      
+      if (currentSelection) {
+        addedVideos = currentSelection.added_videos || [];
+        removedVideos = currentSelection.removed_videos || [];
+      } else {
+        // 沒有快照時，手動計算差異
+        const addedIds = currentVideoIds.filter(id => !previousVideoIds.includes(id));
+        const removedIds = previousVideoIds.filter(id => !currentVideoIds.includes(id));
+        addedVideos = addedIds.map(id => videosMap.get(id)).filter(Boolean);
+        removedVideos = removedIds.map(id => videosMap.get(id)).filter(Boolean);
+      }
+      
       const keptIds = currentVideoIds.filter(id => previousVideoIds.includes(id));
       
       // 組合影片詳情
-      const currentVideos = currentVideoIds.map(id => videosMap.get(id)).filter(Boolean);
+      const currentVideos = currentList.map(item => item.videos).filter(Boolean);
       const previousVideos = previousVideoIds.map(id => videosMap.get(id)).filter(Boolean);
-      const addedVideos = addedIds.map(id => videosMap.get(id)).filter(Boolean);
-      const removedVideos = removedIds.map(id => videosMap.get(id)).filter(Boolean);
       const keptVideos = keptIds.map(id => videosMap.get(id)).filter(Boolean);
       
       return {
@@ -652,14 +707,14 @@ router.get('/monthly-summary', requireAuth, async (req, res) => {
           name: customer.name,
           email: customer.email
         },
-        currentSelection: currentSelection ? {
-          videoCount: currentVideoIds.length,
-          submittedAt: currentSelection.created_at,
+        currentSelection: currentList.length > 0 ? {
+          videoCount: currentList.length,
+          submittedAt: currentSelection?.snapshot_date || currentList[0]?.added_at,
           videos: currentVideos
         } : null,
         previousSelection: previousSelection ? {
           videoCount: previousVideoIds.length,
-          submittedAt: previousSelection.created_at,
+          submittedAt: previousSelection.snapshot_date,
           videos: previousVideos
         } : null,
         diff: {

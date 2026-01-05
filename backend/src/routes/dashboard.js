@@ -172,30 +172,49 @@ router.get('/admin/overview', async (req, res) => {
     }
 
     if (targetBatch) {
-      const { data: selectionRows, error: selectionError } = await supabase
-        .from('selections')
-        .select('user_id, video_ids, created_at')
-        .eq('batch_id', targetBatch.id);
+      // 使用 customer_current_list 表（累積清單）而非 selections 表（按批次）
+      const { data: currentListRows, error: listError } = await supabase
+        .from('customer_current_list')
+        .select('customer_id, video_id')
+        .not('video_id', 'is', null);
 
-      if (selectionError) throw selectionError;
+      if (listError) throw listError;
 
-      const selectionMap = new Map();
-      (selectionRows || []).forEach((row) => {
-        selectionMap.set(row.user_id, row);
+      // 統計每個客戶的影片數量
+      const customerVideoCount = new Map();
+      (currentListRows || []).forEach((row) => {
+        const count = customerVideoCount.get(row.customer_id) || 0;
+        customerVideoCount.set(row.customer_id, count + 1);
       });
 
-      submittedCount = selectionMap.size;
+      // 查詢最後提交時間（從 selection_history）
+      const { data: lastSubmissions, error: historyError } = await supabase
+        .from('selection_history')
+        .select('customer_id, snapshot_date')
+        .order('snapshot_date', { ascending: false });
+
+      if (historyError) throw historyError;
+
+      const lastSubmissionMap = new Map();
+      (lastSubmissions || []).forEach((row) => {
+        if (!lastSubmissionMap.has(row.customer_id)) {
+          lastSubmissionMap.set(row.customer_id, row.snapshot_date);
+        }
+      });
+
+      submittedCount = customerVideoCount.size;
       pendingCount = Math.max(customers.length - submittedCount, 0);
 
       selectionDetails = customers.map((customer) => {
-        const record = selectionMap.get(customer.id);
+        const videoCount = customerVideoCount.get(customer.id) || 0;
+        const lastSubmitted = lastSubmissionMap.get(customer.id);
         return {
           id: customer.id,
           name: customer.name,
           email: customer.email,
-          status: record ? 'submitted' : 'pending',
-          submittedAt: record?.created_at || null,
-          videoCount: record?.video_ids?.length || 0,
+          status: videoCount > 0 ? 'submitted' : 'pending',
+          submittedAt: lastSubmitted || null,
+          videoCount: videoCount,
         };
       });
     }

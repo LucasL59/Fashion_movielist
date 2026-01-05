@@ -38,69 +38,58 @@ export default function SelectionHistory() {
       setLoading(true)
       setError('')
 
-      // 獲取用戶的選擇記錄
+      // 獲取用戶的選擇歷史記錄（從 selection_history 表）
       const { data: selectionsData, error: selectionsError } = await supabase
-        .from('selections')
-        .select(`
-          *,
-          batches:batch_id (
-            id,
-            name,
-            month,
-            created_at
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .from('selection_history')
+        .select('*')
+        .eq('customer_id', user.id)
+        .order('snapshot_date', { ascending: false })
 
       if (selectionsError) throw selectionsError
 
-      // 對每個選擇，獲取影片詳情
+      console.log(`📊 找到 ${selectionsData?.length || 0} 筆選擇歷史記錄`)
+
+      // selection_history 已包含影片詳情，直接處理
       const videoCache = new Map()
-      const selectionsWithVideos = await Promise.all(
-        (selectionsData || []).map(async (selection) => {
-          const videoIds = selection.video_ids || []
-
-          if (videoIds.length === 0) {
-            return {
-              ...selection,
-              videos: []
-            }
-          }
-
-          const { data: videos, error: videosError } = await supabase
-            .from('videos')
-            .select('id, title, title_en, thumbnail_url')
-            .in('id', videoIds)
-
-          if (videosError) {
-            console.error('載入影片失敗:', videosError)
-            return {
-              ...selection,
-              videos: []
-            }
-          }
-
-          videos?.forEach(video => {
-            if (video?.id) {
-              videoCache.set(video.id, video)
-            }
-          })
-
-          return {
-            ...selection,
-            videos: videos || []
-          }
+      const selectionsWithVideos = (selectionsData || []).map((selection) => {
+        const videoIds = selection.video_ids || []
+        
+        // 如果有 added_videos 和 removed_videos（JSON 格式），直接使用
+        let allVideos = []
+        
+        // 合併當前影片、新增影片、移除影片到快取
+        const currentVideos = selection.current_videos || []
+        const addedVideos = selection.added_videos || []
+        const removedVideos = selection.removed_videos || []
+        
+        currentVideos.forEach(video => {
+          if (video?.id) videoCache.set(video.id, video)
+          allVideos.push(video)
         })
-      )
+        
+        addedVideos.forEach(video => {
+          if (video?.id) videoCache.set(video.id, video)
+        })
+        
+        removedVideos.forEach(video => {
+          if (video?.id) videoCache.set(video.id, video)
+        })
 
-      const sortedSelections = [...(selectionsWithVideos || [])].sort((a, b) => {
-        const monthA = a?.batches?.month || ''
-        const monthB = b?.batches?.month || ''
+        return {
+          ...selection,
+          created_at: selection.snapshot_date, // 使用 snapshot_date 作為 created_at
+          videos: allVideos,
+          batches: { month: selection.month } // 模擬 batches 結構以保持兼容
+        }
+      })
+
+      const sortedSelections = [...selectionsWithVideos].sort((a, b) => {
+        const monthA = a?.batches?.month || a?.month || ''
+        const monthB = b?.batches?.month || b?.month || ''
         if (monthA && monthB && monthA !== monthB) {
           return monthB.localeCompare(monthA)
         }
-        return new Date(b.created_at) - new Date(a.created_at)
+        return new Date(b.created_at || b.snapshot_date) - new Date(a.created_at || a.snapshot_date)
       })
 
       const enhancedSelections = sortedSelections.map((selection, index) => {
