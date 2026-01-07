@@ -78,21 +78,24 @@ export function AuthProvider({ children }) {
     
     // 監聽頁面可見性變化 - 當用戶回到頁面時檢查 Session
     const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible' && user) {
-        try {
-          const { data: { session }, error } = await supabase.auth.getSession()
-          if (error || !session) {
-            console.warn('Session 已過期，正在清除狀態...')
+      // 只在頁面變為可見時檢查
+      if (document.visibilityState !== 'visible') return
+      
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        // 如果有 session 但獲取失敗，或沒有 session 且當前頁面不是登入頁
+        if (error || !session) {
+          const currentPath = window.location.pathname
+          // 只有在非登入頁且之前有 session 的情況下才跳轉
+          if (currentPath !== '/login' && currentPath !== '/') {
+            console.warn('Session 已過期，正在跳轉到登入頁...')
             setUser(null)
             clearAuthStorage()
-            // 跳轉到登入頁
-            if (window.location.pathname !== '/login') {
-              window.location.replace('/login?expired=true')
-            }
+            window.location.replace('/login?expired=true')
           }
-        } catch (e) {
-          console.warn('檢查 Session 失敗:', e)
         }
+      } catch (e) {
+        console.warn('檢查 Session 失敗:', e)
       }
     }
     
@@ -102,7 +105,7 @@ export function AuthProvider({ children }) {
       subscription.unsubscribe()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [user]) // 當 user 變化時重新設置監聽器
+  }, []) // 只在組件掛載時執行一次，避免無限循環
   
   /**
    * 獲取用戶 Profile
