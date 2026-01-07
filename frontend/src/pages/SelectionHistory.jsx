@@ -53,11 +53,15 @@ export default function SelectionHistory() {
       console.log('📋 當前清單:', listResponse)
       console.log('📜 歷史記錄:', historyResponse)
 
-      // 設置當前清單
-      setCurrentList(listResponse.data || [])
+      // 設置當前清單 - API 返回 { data: { items: [...] }, count: N }
+      const items = listResponse.data?.items || listResponse.data || []
+      setCurrentList(items)
+      console.log(`✅ 設置當前清單: ${items.length} 部影片`)
 
-      // 設置歷史記錄
-      setHistoryRecords(historyResponse.data || [])
+      // 設置歷史記錄 - API 返回 { data: [...], count: N }
+      const history = historyResponse.data || []
+      setHistoryRecords(history)
+      console.log(`✅ 設置歷史記錄: ${history.length} 筆`)
 
     } catch (error) {
       console.error('載入選擇記錄失敗:', error)
