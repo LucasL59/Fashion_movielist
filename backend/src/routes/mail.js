@@ -406,15 +406,20 @@ async function buildDefaultRecipients(users) {
     description: '系統管理員',
   }));
 
-  // 客戶清單調整通知：通知系統管理員和該批次上傳者
+  // 上傳者清單
+  const uploaderEntries = (users || [])
+    .filter((user) => user.role === 'uploader')
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      description: '上傳者',
+    }));
+
+  // 客戶清單調整通知：通知所有系統管理員和所有上傳者
   const selectionSubmittedRecipients = [
     ...adminEntries,
-    {
-      id: 'dynamic-uploader',
-      name: '該批次上傳者',
-      email: '—',
-      description: '實際寄信時會依照批次上傳者自動加入並排除重複',
-    },
+    ...uploaderEntries,
   ];
 
   // 新影片清單上傳通知：通知系統管理員和所有客戶

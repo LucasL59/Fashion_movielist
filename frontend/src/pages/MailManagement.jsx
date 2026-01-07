@@ -928,7 +928,7 @@ export default function MailManagement() {
                 {event.value === 'selection_submitted' && (
                   <div className="flex items-center gap-2 text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2">
                     <ShieldCheck className="h-4 w-4" />
-                    系統預設會通知：所有系統管理員（依使用者資料）與該批次的上傳者，您可以另外加上其他收件人。
+                    系統預設會通知：所有系統管理員與所有上傳者，您可以另外加上其他收件人。
                   </div>
                 )}
                 {event.value === 'batch_uploaded' && (
