@@ -44,9 +44,13 @@ MVI Select 是一套 React + Node.js + Supabase 打造的「每月影片選擇�
 ### v3.5.2 安全性與穩定性修正 🛡️
 
 - **🔒 修復 Supabase 視圖安全警告**：
-  - `batch_stats` 視圖從 SECURITY DEFINER 改為 SECURITY INVOKER
+  - 修復 3 個視圖的 SECURITY DEFINER 問題：
+    - `batch_stats`
+    - `monthly_batch_summary`
+    - `customer_list_summary`
+  - 所有視圖改為 `security_invoker = true`
   - 視圖現在會遵循查詢用戶的 RLS 權限，而非視圖創建者的權限
-  - 消除 Supabase Dashboard 的 Critical 安全警告
+  - 消除 Supabase Dashboard 的所有 Critical 安全警告
 
 - **⏰ 修復頁面閒置後無法操作的問題**：
   - 問題：用戶閒置一段時間後回到頁面，所有功能顯示「讀取中」，連登出也無法操作
