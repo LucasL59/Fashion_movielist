@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react'
-import { Check, Clock, Star, Film, X, Plus, Minus, Eye } from 'lucide-react'
+import { Check, Clock, Star, Film, X, Plus, Minus, Eye, Sparkles } from 'lucide-react'
 
 export default function MovieCard_v3({ 
   video, 
@@ -120,6 +120,16 @@ export default function MovieCard_v3({
           >
             <Eye className="h-4 w-4" />
           </button>
+        )}
+        
+        {/* 新影片標籤 */}
+        {video.isNew && (
+          <div className="absolute bottom-2 left-2">
+            <span className="inline-flex items-center gap-1 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-xs px-2 py-1 rounded-full font-bold shadow-lg animate-pulse">
+              <Sparkles className="h-3 w-3" />
+              New
+            </span>
+          </div>
         )}
       </div>
       

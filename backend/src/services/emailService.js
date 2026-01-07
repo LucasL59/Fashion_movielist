@@ -226,6 +226,49 @@ async function getAdminRecipients(excludeIds = []) {
   }
 }
 
+/**
+ * 獲取所有管理員和上傳者的郵箱
+ * 用於客戶提交影片選擇通知
+ */
+async function getAdminAndUploaderRecipients(excludeIds = []) {
+  try {
+    console.log('🔍 [getAdminAndUploaderRecipients] 開始查詢管理員和上傳者');
+    
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, email, name, role')
+      .in('role', ['admin', 'uploader']);
+
+    if (error) throw error;
+    
+    console.log('📊 [getAdminAndUploaderRecipients] 查詢結果:', data);
+
+    const recipients = (data || [])
+      .filter((profile) => profile.email)
+      .filter((profile) => !excludeIds.includes(profile.id))
+      .map((profile) => profile.email);
+    
+    console.log('✅ [getAdminAndUploaderRecipients] 過濾後的郵箱:', recipients);
+
+    if (recipients.length > 0) {
+      return recipients;
+    }
+
+    // 回退到環境變數
+    console.log('⚠️ [getAdminAndUploaderRecipients] 沒有找到收件人，使用環境變數');
+    const fallbackEmails = process.env.ADMIN_EMAIL
+      ? process.env.ADMIN_EMAIL.split(',').map((email) => email.trim()).filter(Boolean)
+      : [];
+    
+    return fallbackEmails;
+  } catch (error) {
+    console.error('❌ [getAdminAndUploaderRecipients] 查詢失敗:', error);
+    return process.env.ADMIN_EMAIL
+      ? process.env.ADMIN_EMAIL.split(',').map((email) => email.trim()).filter(Boolean)
+      : [];
+  }
+}
+
 function mergeRecipients(...lists) {
   const emails = new Map();
   lists.flat().forEach((recipient) => {
@@ -444,16 +487,15 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
       return { disabled: true };
     }
 
-    // 獲取收件人列表（管理員 + 郵件規則收件人）
-    const adminRecipients = await getAdminRecipients([])
-    console.log('👥 [notifyAdminCustomerSelection] 管理員收件人:', adminRecipients);
+    // 獲取收件人列表（所有管理員 + 所有上傳者 + 郵件規則收件人）
+    const adminAndUploaderRecipients = await getAdminAndUploaderRecipients([])
+    console.log('👥 [notifyAdminCustomerSelection] 管理員和上傳者收件人:', adminAndUploaderRecipients);
     
     const mailRuleRecipients = await getMailRecipientsByEvent(MAIL_EVENT_TYPES.SELECTION_SUBMITTED);
     console.log('📧 [notifyAdminCustomerSelection] 郵件規則收件人:', mailRuleRecipients);
     
     const recipients = mergeRecipients(
-      adminRecipients,
-      null, // 不需要 uploader email
+      adminAndUploaderRecipients,
       mailRuleRecipients
     );
     

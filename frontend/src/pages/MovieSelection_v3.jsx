@@ -13,7 +13,7 @@ import { createPortal } from 'react-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { 
   Film, CheckCircle, AlertCircle, Loader, ShoppingCart, Calendar, 
-  Grid, List as ListIcon, Send, History, X, Check, Plus, Minus 
+  Grid, List as ListIcon, Send, History, X, Check, Plus, Minus, Sparkles 
 } from 'lucide-react'
 import MovieCard_v3 from '../components/MovieCard_v3'
 import Select from '../components/Select'
@@ -77,6 +77,11 @@ export default function MovieSelection() {
   const currentSelectedCount = useMemo(() => {
     return customerListIds.size - pendingChanges.remove.size + pendingChanges.add.size
   }, [customerListIds, pendingChanges.add.size, pendingChanges.remove.size])
+  
+  // 計算新影片數量（相對於上個月）
+  const newVideosCount = useMemo(() => {
+    return monthlyVideos.filter(video => video.isNew).length
+  }, [monthlyVideos])
   
   // ==================== 載入資料 ====================
   
@@ -582,9 +587,18 @@ export default function MovieSelection() {
       <div>
         {/* 標題列與視圖切換 */}
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold text-gray-900">
-            {selectedMonth} 影片清單 ({monthlyVideos.length} 部)
-          </h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold text-gray-900">
+              {selectedMonth} 影片清單 ({monthlyVideos.length} 部)
+            </h2>
+            {/* 新影片數量標籤 */}
+            {newVideosCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-orange-500 text-white text-sm px-3 py-1 rounded-full font-semibold shadow-md">
+                <Sparkles className="h-4 w-4" />
+                {newVideosCount} 部新片
+              </span>
+            )}
+          </div>
           
           <div className="flex items-center gap-2">
             <button

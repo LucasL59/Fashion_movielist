@@ -104,9 +104,23 @@ router.get('/batches', async (req, res) => {
 });
 
 /**
+ * 計算上一個月份的字串
+ * @param {string} month - 格式 "YYYY-MM"
+ * @returns {string} 上一個月份
+ */
+function getPreviousMonth(month) {
+  const [year, mon] = month.split('-').map(Number);
+  const prevDate = new Date(year, mon - 2, 1); // mon-1 是當前月的索引，mon-2 是上個月
+  const prevYear = prevDate.getFullYear();
+  const prevMon = String(prevDate.getMonth() + 1).padStart(2, '0');
+  return `${prevYear}-${prevMon}`;
+}
+
+/**
  * GET /api/videos/by-month/:month
  * 
  * 獲取指定月份的影片清單
+ * 並標記相對於上個月新增的影片
  */
 router.get('/by-month/:month', async (req, res) => {
   try {
@@ -147,13 +161,53 @@ router.get('/by-month/:month', async (req, res) => {
     
     if (videosError) throw videosError;
     
-    console.log(`✅ [videos/by-month] 找到批次 ${latestBatch.name}，包含 ${videos.length} 部影片`);
+    // ===== 比較上個月份，標記新增的影片 =====
+    const previousMonth = getPreviousMonth(month);
+    let previousVideoTitles = new Set();
+    
+    // 嘗試獲取上個月份的批次
+    const { data: prevBatch, error: prevBatchError } = await supabase
+      .from('batches')
+      .select('id')
+      .eq('month', previousMonth)
+      .eq('status', 'active')
+      .eq('is_latest', true)
+      .single();
+    
+    if (!prevBatchError && prevBatch) {
+      // 獲取上個月份的影片標題集合
+      const { data: prevVideos, error: prevVideosError } = await supabase
+        .from('videos')
+        .select('title')
+        .eq('batch_id', prevBatch.id);
+      
+      if (!prevVideosError && prevVideos) {
+        previousVideoTitles = new Set(prevVideos.map(v => v.title?.trim().toLowerCase()));
+      }
+    }
+    
+    console.log(`📊 [videos/by-month] 上月 ${previousMonth} 有 ${previousVideoTitles.size} 部影片用於比較`);
+    
+    // 為每部影片標記是否為新增
+    const videosWithNewFlag = (videos || []).map(video => {
+      const titleNormalized = video.title?.trim().toLowerCase();
+      const isNew = !previousVideoTitles.has(titleNormalized);
+      return {
+        ...video,
+        isNew
+      };
+    });
+    
+    const newCount = videosWithNewFlag.filter(v => v.isNew).length;
+    console.log(`✅ [videos/by-month] 找到批次 ${latestBatch.name}，包含 ${videos.length} 部影片，其中 ${newCount} 部為新增`);
     
     res.json({
       success: true,
       data: {
         batch: latestBatch,
-        videos: videos || []
+        videos: videosWithNewFlag,
+        newVideosCount: newCount,
+        previousMonth: previousMonth
       }
     });
     
