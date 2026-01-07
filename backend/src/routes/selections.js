@@ -492,19 +492,20 @@ router.get('/previous/:currentBatchId', requireAuth, async (req, res) => {
 /**
  * GET /api/selections/customer-lists
  * 
- * 管理員查看所有客戶的當前累積清單
+ * 管理員/上傳者查看所有客戶的當前累積清單
  * v3 架構：客戶維護一份持續更新的清單，不再按月份劃分
  */
 router.get('/customer-lists', requireAuth, async (req, res) => {
   try {
     const authProfile = req.authUserProfile;
     const authUser = req.authUser;
+    const userRole = authProfile?.role || authUser?.user_metadata?.role;
     
-    // 檢查是否為管理員
-    if (authProfile?.role !== 'admin' && authUser?.user_metadata?.role !== 'admin') {
+    // 檢查是否為管理員或上傳者
+    if (userRole !== 'admin' && userRole !== 'uploader') {
       return res.status(403).json({ 
         error: 'Forbidden',
-        message: '此功能僅限管理員使用' 
+        message: '此功能僅限管理員和上傳者使用' 
       });
     }
     
@@ -672,13 +673,13 @@ router.get('/customer-lists', requireAuth, async (req, res) => {
             : '無變更記錄';
           console.log(`  ✓ 客戶 ${index + 1}: ${customer.name} - 目前 ${videos.length} 部，最近變更: ${changeInfo}`);
         }
-        
-        return {
-          customer: {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email
-          },
+      
+      return {
+        customer: {
+          id: customer.id,
+          name: customer.name,
+          email: customer.email
+        },
           currentList: {
             videoCount: videos.length,
             videos: videos
@@ -735,6 +736,191 @@ router.get('/customer-lists', requireAuth, async (req, res) => {
 router.get('/monthly-summary', requireAuth, async (req, res) => {
   // 重定向到新的 customer-lists 端點
   return res.redirect(308, '/api/selections/customer-lists');
+});
+
+/**
+ * GET /api/selections/export-changes
+ * 
+ * 匯出指定月份的客戶清單調整記錄為 Excel
+ * 參數: month (YYYY-MM 格式)
+ */
+router.get('/export-changes', requireAuth, async (req, res) => {
+  try {
+    const authProfile = req.authUserProfile;
+    const authUser = req.authUser;
+    const userRole = authProfile?.role || authUser?.user_metadata?.role;
+    
+    // 檢查是否為管理員或上傳者
+    if (userRole !== 'admin' && userRole !== 'uploader') {
+      return res.status(403).json({ 
+        error: 'Forbidden',
+        message: '此功能僅限管理員和上傳者使用' 
+      });
+    }
+
+    const { month } = req.query; // YYYY-MM 格式
+    if (!month) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: '請指定月份參數 (month=YYYY-MM)'
+      });
+    }
+
+    console.log(`📊 匯出 ${month} 的客戶清單調整記錄...`);
+
+    // 計算月份範圍
+    const startDate = new Date(`${month}-01T00:00:00.000Z`);
+    const endDate = new Date(startDate);
+    endDate.setMonth(endDate.getMonth() + 1);
+
+    // 查詢該月份的所有選擇歷史記錄
+    const { data: historyRecords, error: historyError } = await supabase
+      .from('selection_history')
+      .select('*')
+      .gte('snapshot_date', startDate.toISOString())
+      .lt('snapshot_date', endDate.toISOString())
+      .order('snapshot_date', { ascending: false });
+
+    if (historyError) throw historyError;
+
+    // 獲取客戶資料
+    const customerIds = [...new Set(historyRecords.map(r => r.customer_id))];
+    const { data: customers, error: customersError } = await supabase
+      .from('profiles')
+      .select('id, name, email')
+      .in('id', customerIds);
+
+    if (customersError) throw customersError;
+
+    const customerMap = new Map(customers.map(c => [c.id, c]));
+
+    // 使用 ExcelJS 建立 Excel 檔案
+    const ExcelJS = (await import('exceljs')).default;
+    const workbook = new ExcelJS.Workbook();
+    
+    // 設定工作簿屬性
+    workbook.creator = 'MVI Select System';
+    workbook.lastModifiedBy = 'MVI Select System';
+    workbook.created = new Date();
+    workbook.modified = new Date();
+
+    // 建立「調整摘要」工作表
+    const summarySheet = workbook.addWorksheet('調整摘要');
+    summarySheet.columns = [
+      { header: '客戶名稱', key: 'customerName', width: 20 },
+      { header: '客戶信箱', key: 'customerEmail', width: 30 },
+      { header: '提交時間', key: 'submittedAt', width: 22 },
+      { header: '新增數量', key: 'addedCount', width: 12 },
+      { header: '移除數量', key: 'removedCount', width: 12 },
+      { header: '目前總數', key: 'totalCount', width: 12 }
+    ];
+
+    // 設定標題列樣式
+    summarySheet.getRow(1).font = { bold: true };
+    summarySheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF4F81BD' }
+    };
+    summarySheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    // 填入摘要資料
+    historyRecords.forEach(record => {
+      const customer = customerMap.get(record.customer_id);
+      summarySheet.addRow({
+        customerName: customer?.name || '未知',
+        customerEmail: customer?.email || '未知',
+        submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW'),
+        addedCount: record.added_count || 0,
+        removedCount: record.removed_count || 0,
+        totalCount: record.total_count || 0
+      });
+    });
+
+    // 建立「新增影片明細」工作表
+    const addedSheet = workbook.addWorksheet('新增影片明細');
+    addedSheet.columns = [
+      { header: '客戶名稱', key: 'customerName', width: 20 },
+      { header: '提交時間', key: 'submittedAt', width: 22 },
+      { header: '影片名稱', key: 'videoTitle', width: 35 },
+      { header: '英文名稱', key: 'videoTitleEn', width: 35 },
+      { header: '來源月份', key: 'sourceMonth', width: 15 }
+    ];
+    
+    addedSheet.getRow(1).font = { bold: true };
+    addedSheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FF70AD47' }
+    };
+    addedSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    // 填入新增影片明細
+    historyRecords.forEach(record => {
+      const customer = customerMap.get(record.customer_id);
+      const addedVideos = record.added_videos || [];
+      addedVideos.forEach(video => {
+        addedSheet.addRow({
+          customerName: customer?.name || '未知',
+          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW'),
+          videoTitle: video.title || '未知',
+          videoTitleEn: video.title_en || '',
+          sourceMonth: video.month || ''
+        });
+      });
+    });
+
+    // 建立「移除影片明細」工作表
+    const removedSheet = workbook.addWorksheet('移除影片明細');
+    removedSheet.columns = [
+      { header: '客戶名稱', key: 'customerName', width: 20 },
+      { header: '提交時間', key: 'submittedAt', width: 22 },
+      { header: '影片名稱', key: 'videoTitle', width: 35 },
+      { header: '英文名稱', key: 'videoTitleEn', width: 35 },
+      { header: '來源月份', key: 'sourceMonth', width: 15 }
+    ];
+    
+    removedSheet.getRow(1).font = { bold: true };
+    removedSheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFED7D31' }
+    };
+    removedSheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+
+    // 填入移除影片明細
+    historyRecords.forEach(record => {
+      const customer = customerMap.get(record.customer_id);
+      const removedVideos = record.removed_videos || [];
+      removedVideos.forEach(video => {
+        removedSheet.addRow({
+          customerName: customer?.name || '未知',
+          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW'),
+          videoTitle: video.title || '未知',
+          videoTitleEn: video.title_en || '',
+          sourceMonth: video.month || ''
+        });
+      });
+    });
+
+    // 設定響應標頭
+    const filename = `客戶清單調整_${month}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+
+    // 寫入響應
+    await workbook.xlsx.write(res);
+    res.end();
+
+    console.log(`✅ 成功匯出 ${month} 的調整記錄，共 ${historyRecords.length} 筆`);
+
+  } catch (error) {
+    console.error('❌ 匯出失敗:', error);
+    res.status(500).json({ 
+      error: 'Internal Server Error',
+      message: '匯出失敗: ' + error.message
+    });
+  }
 });
 
 export default router;

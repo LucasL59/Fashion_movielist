@@ -553,5 +553,27 @@ export async function getMonthlySelectionSummary(month) {
   return getCustomerListsOverview()
 }
 
+/**
+ * 匯出指定月份的客戶清單調整記錄為 Excel
+ */
+export async function exportMonthlyChanges(month) {
+  const response = await api.get(`/api/selections/export-changes?month=${month}`, {
+    responseType: 'blob'
+  })
+  
+  // 創建下載連結
+  const blob = new Blob([response.data], { 
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+  })
+  const url = window.URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `客戶清單調整_${month}.xlsx`
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  window.URL.revokeObjectURL(url)
+}
+
 export default api
 

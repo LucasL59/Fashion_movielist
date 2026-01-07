@@ -164,11 +164,15 @@ function AppRoutes() {
         </ProtectedRoute>
       } />
       
-      {/* 已選片單總覽頁面（僅管理員） */}
+      {/* 客戶清單總覽頁面（管理員和上傳者） */}
       <Route path="/selection-summary" element={
-        <ProtectedRoute requiredRole="admin">
+        <ProtectedRoute>
           <Layout>
-            <AdminSelectionSummary />
+            {(user?.role === 'admin' || user?.role === 'uploader') ? (
+              <AdminSelectionSummary />
+            ) : (
+              <Navigate to="/" replace />
+            )}
           </Layout>
         </ProtectedRoute>
       } />

@@ -82,6 +82,16 @@ export default function SelectionHistory() {
     })
   }
 
+  function formatMonth(monthStr) {
+    if (!monthStr) return null
+    try {
+      const [year, month] = monthStr.split('-')
+      return `${year}年${parseInt(month)}月`
+    } catch {
+      return monthStr
+    }
+  }
+
   function toggleExpand(recordId) {
     setExpandedRecords(prev => {
       const newSet = new Set(prev)
@@ -337,29 +347,39 @@ export default function SelectionHistory() {
                               新增 {addedCount} 部影片
                             </h4>
                             <div className="space-y-2">
-                              {addedVideos.map((video, idx) => (
-                                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-white">
-                                  {video.thumbnail_url ? (
-                                    <img
-                                      src={video.thumbnail_url}
-                                      alt={video.title}
-                                      className="w-10 h-14 rounded object-cover flex-shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-14 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                      <Film className="h-4 w-4 text-gray-400" />
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">
-                                      {video.title || '未知影片'}
-                                    </p>
-                                    {video.title_en && (
-                                      <p className="text-xs text-gray-500 truncate">{video.title_en}</p>
+                              {addedVideos.map((video, idx) => {
+                                const monthLabel = video.month ? formatMonth(video.month) : null
+                                return (
+                                  <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-white">
+                                    {video.thumbnail_url ? (
+                                      <img
+                                        src={video.thumbnail_url}
+                                        alt={video.title}
+                                        className="w-10 h-14 rounded object-cover flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-14 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                        <Film className="h-4 w-4 text-gray-400" />
+                                      </div>
                                     )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                          {video.title || '未知影片'}
+                                        </p>
+                                        {monthLabel && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">
+                                            {monthLabel}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {video.title_en && (
+                                        <p className="text-xs text-gray-500 truncate">{video.title_en}</p>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           </div>
                         )}
@@ -372,29 +392,39 @@ export default function SelectionHistory() {
                               移除 {removedCount} 部影片
                             </h4>
                             <div className="space-y-2">
-                              {removedVideos.map((video, idx) => (
-                                <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-white">
-                                  {video.thumbnail_url ? (
-                                    <img
-                                      src={video.thumbnail_url}
-                                      alt={video.title}
-                                      className="w-10 h-14 rounded object-cover flex-shrink-0"
-                                    />
-                                  ) : (
-                                    <div className="w-10 h-14 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
-                                      <Film className="h-4 w-4 text-gray-400" />
-                                    </div>
-                                  )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-gray-900 truncate">
-                                      {video.title || '未知影片'}
-                                    </p>
-                                    {video.title_en && (
-                                      <p className="text-xs text-gray-500 truncate">{video.title_en}</p>
+                              {removedVideos.map((video, idx) => {
+                                const monthLabel = video.month ? formatMonth(video.month) : null
+                                return (
+                                  <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-white">
+                                    {video.thumbnail_url ? (
+                                      <img
+                                        src={video.thumbnail_url}
+                                        alt={video.title}
+                                        className="w-10 h-14 rounded object-cover flex-shrink-0"
+                                      />
+                                    ) : (
+                                      <div className="w-10 h-14 rounded bg-gray-100 flex items-center justify-center flex-shrink-0">
+                                        <Film className="h-4 w-4 text-gray-400" />
+                                      </div>
                                     )}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                          {video.title || '未知影片'}
+                                        </p>
+                                        {monthLabel && (
+                                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">
+                                            {monthLabel}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {video.title_en && (
+                                        <p className="text-xs text-gray-500 truncate">{video.title_en}</p>
+                                      )}
+                                    </div>
                                   </div>
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           </div>
                         )}

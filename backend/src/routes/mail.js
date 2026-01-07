@@ -406,29 +406,35 @@ async function buildDefaultRecipients(users) {
     description: '系統管理員',
   }));
 
+  // 客戶清單調整通知：通知系統管理員和該批次上傳者
+  const selectionSubmittedRecipients = [
+    ...adminEntries,
+    {
+      id: 'dynamic-uploader',
+      name: '該批次上傳者',
+      email: '—',
+      description: '實際寄信時會依照批次上傳者自動加入並排除重複',
+    },
+  ];
+
+  // 新影片清單上傳通知：通知系統管理員和所有客戶
+  const customerEntries = (users || [])
+    .filter((user) => user.role === 'customer')
+    .map((user) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      description: '客戶',
+    }));
+
+  const batchUploadedRecipients = [
+    ...adminEntries,
+    ...customerEntries,
+  ];
+
   return {
-    selection_submitted: [
-      ...adminEntries,
-      {
-        id: 'dynamic-uploader',
-        name: '該批次上傳者',
-        email: '—',
-        description: '實際寄信時會依照批次上傳者自動加入並排除重複',
-      },
-    ],
-    batch_uploaded: (users || [])
-      .filter((user) => user.role !== 'customer') // 只顯示管理員與上傳者
-      .map((user) => ({
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        description:
-          user.role === 'admin'
-            ? '系統管理員'
-            : user.role === 'uploader'
-            ? '上傳者'
-            : '其他',
-      })),
+    selection_submitted: selectionSubmittedRecipients,
+    batch_uploaded: batchUploadedRecipients,
   }
 }
 

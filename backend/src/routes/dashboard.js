@@ -6,6 +6,7 @@
 
 import express from 'express';
 import { supabase } from '../config/supabase.js';
+import { requireAuth, requireRoles } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -73,19 +74,8 @@ router.get('/customer/:userId', async (req, res) => {
     const hasSelection = customerListCount > 0;
     
     // v3 架構：判斷是否有新批次需要客戶處理
-    // 邏輯：有新批次，且客戶在該批次上傳之後還沒有調整過累積清單
-    let hasNewBatch = false;
-    if (latestBatch) {
-      const batchCreatedAt = new Date(latestBatch.created_at);
-      if (lastSubmission) {
-        // 比較客戶最後提交時間與最新批次上傳時間
-        const lastSubmitAt = new Date(lastSubmission.snapshot_date);
-        hasNewBatch = lastSubmitAt < batchCreatedAt; // 客戶在新批次後還沒提交過
-      } else {
-        // 客戶從未提交過，且有新批次
-        hasNewBatch = true;
-      }
-    }
+    // 邏輯：只要有批次存在就顯示提示（因為上傳者可能會多次更新同月份清單）
+    const hasNewBatch = Boolean(latestBatch);
 
     res.json({
       success: true,
@@ -117,7 +107,7 @@ router.get('/customer/:userId', async (req, res) => {
  * 提供管理員/上傳者需要的當月上傳與選擇概況
  * 支持按月份篩選客戶提交記錄（優先）或按批次 ID（向後兼容）
  */
-router.get('/admin/overview', async (req, res) => {
+router.get('/admin/overview', requireAuth, requireRoles(['admin', 'uploader']), async (req, res) => {
   try {
     const { batchId, month } = req.query; // month 格式: YYYY-MM
 

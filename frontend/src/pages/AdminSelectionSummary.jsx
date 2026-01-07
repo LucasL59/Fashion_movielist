@@ -18,9 +18,10 @@ import {
   MinusCircle,
   CheckCircle,
   Grid,
-  List as ListIcon
+  List as ListIcon,
+  Download
 } from 'lucide-react'
-import { getMonthlySelectionSummary } from '../lib/api'
+import { getMonthlySelectionSummary, exportMonthlyChanges } from '../lib/api'
 import { useToast } from '../contexts/ToastContext'
 import SelectionDiffSection from '../components/SelectionDiffSection'
 
@@ -31,6 +32,11 @@ export default function AdminSelectionSummary() {
   const [searchTerm, setSearchTerm] = useState('')
   const [expandedCustomers, setExpandedCustomers] = useState(new Set())
   const [viewMode, setViewMode] = useState('grid') // 'grid' | 'list'
+  const [exportMonth, setExportMonth] = useState(() => {
+    const now = new Date()
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  })
+  const [exporting, setExporting] = useState(false)
   
   useEffect(() => {
     loadSummary()
@@ -116,6 +122,30 @@ export default function AdminSelectionSummary() {
   const totalCustomers = summaryData?.summaries?.length || 0
   const submittedCount = summaryData?.summaries?.filter(s => s.currentSelection)?.length || 0
   const pendingCount = totalCustomers - submittedCount
+
+  // 產生可選月份列表（過去12個月）
+  const availableMonths = []
+  const now = new Date()
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1)
+    const value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+    const label = `${d.getFullYear()}年${d.getMonth() + 1}月`
+    availableMonths.push({ value, label })
+  }
+
+  // 匯出功能
+  async function handleExport() {
+    try {
+      setExporting(true)
+      await exportMonthlyChanges(exportMonth)
+      showToast('匯出成功', 'success')
+    } catch (error) {
+      console.error('匯出失敗:', error)
+      showToast('匯出失敗: ' + (error.message || '請稍後再試'), 'error')
+    } finally {
+      setExporting(false)
+    }
+  }
   
   return (
     <div className="space-y-8">
@@ -127,16 +157,48 @@ export default function AdminSelectionSummary() {
       
       {/* 控制列 */}
       <div className="card">
-        {/* 搜尋 */}
-        <div className="relative w-full md:w-96">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <input
-            type="text"
-            placeholder="搜尋客戶名稱或 Email"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-          />
+        <div className="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+          {/* 搜尋 */}
+          <div className="relative w-full md:w-96">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜尋客戶名稱或 Email"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+            />
+          </div>
+
+          {/* 匯出功能 */}
+          <div className="flex items-center gap-2">
+            <select
+              value={exportMonth}
+              onChange={(e) => setExportMonth(e.target.value)}
+              className="px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500"
+            >
+              {availableMonths.map(m => (
+                <option key={m.value} value={m.value}>{m.label}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="btn-secondary flex items-center gap-2 whitespace-nowrap"
+            >
+              {exporting ? (
+                <>
+                  <Loader className="h-4 w-4 animate-spin" />
+                  匯出中...
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4" />
+                  匯出調整記錄
+                </>
+              )}
+            </button>
+          </div>
         </div>
         
         {/* 統計卡片 */}
