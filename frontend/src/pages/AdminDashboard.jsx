@@ -109,9 +109,9 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3 mb-4">
             <BarChart3 className="h-6 w-6 text-primary-600" />
             <div>
-              <p className="text-sm text-gray-500">本月選擇進度</p>
+              <p className="text-sm text-gray-500">客戶提交狀態</p>
               <p className="text-lg font-semibold text-gray-900">
-                {submittedCount}/{totalCustomers} 位已完成
+                {submittedCount}/{totalCustomers} 位已提交
               </p>
             </div>
           </div>
@@ -122,7 +122,7 @@ export default function AdminDashboard() {
             ></div>
           </div>
           <p className="text-sm text-gray-500 mt-2">
-            完成率 {completionRate}%・尚有 {pendingCount} 位待提交
+            提交率 {completionRate}%・尚有 {pendingCount} 位未提交
           </p>
         </div>
 
@@ -166,8 +166,8 @@ export default function AdminDashboard() {
       <div className="card">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">客戶選擇明細</h2>
-            <p className="text-sm text-gray-500">即時掌握誰已完成、誰尚未提交</p>
+            <h2 className="text-xl font-semibold text-gray-900">客戶清單調整明細</h2>
+            <p className="text-sm text-gray-500">查看各客戶的清單狀態與提交情況</p>
           </div>
           
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
@@ -223,8 +223,8 @@ export default function AdminDashboard() {
                 <th className="px-4 py-3 whitespace-nowrap">客戶名稱</th>
                 <th className="px-4 py-3 whitespace-nowrap">Email</th>
                 <th className="px-4 py-3 whitespace-nowrap">狀態</th>
-                <th className="px-4 py-3 whitespace-nowrap">選擇數量</th>
-                <th className="px-4 py-3 whitespace-nowrap">提交時間</th>
+                <th className="px-4 py-3 whitespace-nowrap">擁有影片數</th>
+                <th className="px-4 py-3 whitespace-nowrap">最後提交</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -232,7 +232,7 @@ export default function AdminDashboard() {
                 <tr>
                   <td colSpan={5} className="px-4 py-6 text-center text-gray-500">
                     {statusFilter === 'pending'
-                      ? '太棒了！所有客戶都已完成提交。'
+                      ? '太棒了！所有客戶都已提交清單。'
                       : '目前沒有符合條件的資料。'}
                   </td>
                 </tr>

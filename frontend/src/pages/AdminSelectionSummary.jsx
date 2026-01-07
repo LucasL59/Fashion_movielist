@@ -259,13 +259,13 @@ export default function AdminSelectionSummary() {
                               <StatCard
                                 icon={PlusCircle}
                                 accent="green"
-                                label="最近新增"
+                                label="本次新增"
                                 value={`${summary.diff?.addedCount || 0} 部`}
                               />
                               <StatCard
                                 icon={MinusCircle}
                                 accent="red"
-                                label="最近移除"
+                                label="本次移除"
                                 value={`${summary.diff?.removedCount || 0} 部`}
                               />
                             </div>
@@ -421,29 +421,29 @@ export default function AdminSelectionSummary() {
                             )
                           ) : (
                             <div className="rounded-2xl border border-dashed border-gray-200 p-6 text-center text-gray-500">
-                              尚未選擇任何影片
+                              清單內尚無影片
                             </div>
                           )}
                         </div>
                         <div className="grid gap-6 lg:grid-cols-2">
                           <SelectionDiffSection
-                            title="本月新增的片單"
+                            title="最近新增"
                             highlightColor="green"
                             videos={summary.diff?.added || []}
-                            emptyText="本月未新增影片"
+                            emptyText="最近沒有新增影片"
                           />
                           <SelectionDiffSection
-                            title="本月下架的片單"
+                            title="最近移除"
                             highlightColor="red"
                             videos={summary.diff?.removed || []}
-                            emptyText="本月沒有下架影片"
+                            emptyText="最近沒有移除影片"
                           />
                         </div>
                       </>
                     ) : (
                       <div className="text-center py-8 text-gray-500">
                         <AlertCircle className="h-12 w-12 mx-auto mb-2 text-gray-400" />
-                        <p>此客戶尚未提交片單</p>
+                        <p>此客戶尚未建立清單</p>
                       </div>
                     )}
                   </div>

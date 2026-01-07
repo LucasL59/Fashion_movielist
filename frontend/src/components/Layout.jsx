@@ -119,7 +119,7 @@ export default function Layout({ children }) {
                       <>
                         <NavLink to="/users" icon={Users}>用戶管理</NavLink>
                         <NavLink to="/mail" icon={Mail}>郵件管理</NavLink>
-                        <NavLink to="/selection-summary" icon={ListChecks}>已選清單</NavLink>
+                        <NavLink to="/selection-summary" icon={ListChecks}>客戶清單總覽</NavLink>
                         <NavLink to="/logs" icon={ScrollText}>操作紀錄</NavLink>
                         <NavLink to="/movies" icon={Film}>選擇影片</NavLink>
                       </>
@@ -190,7 +190,7 @@ export default function Layout({ children }) {
                     <>
                       <MobileNavLink to="/users" icon={Users}>用戶管理</MobileNavLink>
                       <MobileNavLink to="/mail" icon={Mail}>郵件管理</MobileNavLink>
-                      <MobileNavLink to="/selection-summary" icon={ListChecks}>已選清單</MobileNavLink>
+                      <MobileNavLink to="/selection-summary" icon={ListChecks}>客戶清單總覽</MobileNavLink>
                       <MobileNavLink to="/logs" icon={ScrollText}>操作紀錄</MobileNavLink>
                     </>
                   )}

@@ -88,7 +88,7 @@ export default function CustomerDashboard() {
           {hasNewBatch && (
             <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-primary-700 shadow-sm">
               <Bell className="h-5 w-5" />
-              <span className="font-medium">有新的影片清單等待您選擇</span>
+              <span className="font-medium">有新的影片清單可供您挑選</span>
             </div>
           )}
         </div>
@@ -102,7 +102,7 @@ export default function CustomerDashboard() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
           <div className={`rounded-2xl border p-4 ${getStatusStyles(!!latestBatch).container}`}>
-            <p className="text-sm text-gray-500">本月清單狀態</p>
+            <p className="text-sm text-gray-500">最新影片清單</p>
             <div className="mt-3 flex items-center gap-3">
               <div className={`p-3 rounded-full ${getStatusStyles(!!latestBatch).icon}`}>
                 <Clock className="h-5 w-5" />
@@ -115,31 +115,31 @@ export default function CustomerDashboard() {
                   {latestBatch ? `更新於 ${formatDateTime(latestBatch.created_at)}` : '等待管理員上傳'}
                 </p>
                 <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyles(!!latestBatch).badge}`}>
-                  {latestBatch ? '資料就緒' : '尚無清單'}
+                  {latestBatch ? '可供挑選' : '尚無清單'}
                 </span>
               </div>
             </div>
           </div>
 
           <div className={`rounded-2xl border p-4 ${getStatusStyles(hasSelection && !!latestBatch).container}`}>
-            <p className="text-sm text-gray-500">我的選擇狀態</p>
+            <p className="text-sm text-gray-500">我的清單狀態</p>
             <div className="mt-3 flex items-center gap-3">
               <div className={`p-3 rounded-full ${getStatusStyles(hasSelection && !!latestBatch).icon}`}>
                 {hasSelection ? <CheckCircle2 className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
               </div>
               <div>
                 <p className="font-semibold text-gray-900">
-                  {hasSelection ? '已提交' : latestBatch ? '等待提交' : '尚未開放'}
+                  {hasSelection ? '已建立' : latestBatch ? '尚未建立' : '尚未開放'}
                 </p>
                 <p className="text-sm text-gray-500">
                   {hasSelection
-                    ? `共選擇 ${status?.customerListCount || selection?.total_count || selection?.video_ids?.length || 0} 部影片`
+                    ? `目前擁有 ${status?.customerListCount || selection?.total_count || selection?.video_ids?.length || 0} 部影片`
                     : latestBatch
-                      ? '完成選擇後才會寄出通知'
-                      : '請等待新的清單'}
+                      ? '調整清單後提交即會通知管理員'
+                      : '請等待新的清單上傳'}
                 </p>
                 <span className={`mt-2 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold ${getStatusStyles(hasSelection && !!latestBatch).badge}`}>
-                  {hasSelection ? '已完成' : latestBatch ? '待處理' : '未開放'}
+                  {hasSelection ? '已建立' : latestBatch ? '待建立' : '未開放'}
                 </span>
               </div>
             </div>
@@ -180,9 +180,9 @@ export default function CustomerDashboard() {
               <Film className="h-8 w-8 text-primary-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">選擇影片</h3>
+              <h3 className="font-semibold text-gray-900">調整清單</h3>
               <p className="text-sm text-gray-600">
-                {hasSelection ? '可重新調整本月選擇' : '立即挑選您想看的影片'}
+                {hasSelection ? '可隨時調整您的影片清單' : '立即挑選您想看的影片'}
               </p>
             </div>
           </div>
@@ -197,8 +197,8 @@ export default function CustomerDashboard() {
               <History className="h-8 w-8 text-green-600" />
             </div>
             <div>
-              <h3 className="font-semibold text-gray-900">選擇記錄</h3>
-              <p className="text-sm text-gray-600">查看過往送出的影片清單</p>
+              <h3 className="font-semibold text-gray-900">調整記錄</h3>
+              <p className="text-sm text-gray-600">查看清單調整歷史</p>
             </div>
           </div>
         </Link>
@@ -227,25 +227,25 @@ export default function CustomerDashboard() {
             <span className="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
               1
             </span>
-            <span>點擊「選擇影片」查看最新的影片清單</span>
+            <span>點擊「調整清單」查看各月份的影片清單</span>
           </li>
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
               2
             </span>
-            <span>點擊影片卡片選擇您想要的影片（可多選）</span>
+            <span>點擊影片可將其加入或移除您的清單</span>
           </li>
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
               3
             </span>
-            <span>點擊「提交選擇」按鈕完成選擇</span>
+            <span>完成調整後點擊「更新我的清單」</span>
           </li>
           <li className="flex gap-3">
             <span className="flex-shrink-0 w-6 h-6 bg-primary-600 text-white rounded-full flex items-center justify-center text-sm font-semibold">
               4
             </span>
-            <span>系統會自動發送 Email 通知管理員</span>
+            <span>系統會自動通知管理員您的調整內容</span>
           </li>
         </ol>
       </div>

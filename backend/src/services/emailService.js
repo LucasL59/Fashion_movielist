@@ -86,7 +86,7 @@ export async function sendWelcomeEmail({ to, name }) {
         </div>
         <div class="content">
           <p>親愛的 ${name || '使用者'}，您好：</p>
-          <p>歡迎加入 <strong>MVI 影片選擇系統</strong>。您可以使用註冊時設定的帳號密碼登入，立即開始挑選每月的專屬片單。</p>
+          <p>歡迎加入 <strong>MVI 影片選擇系統</strong>。您可以使用註冊時設定的帳號密碼登入，立即開始管理您的專屬影片清單。</p>
           <p>若您不是此信件的預期收件者，請忽略本郵件或與客服聯繫。</p>
           <a class="button" href="${frontendUrl}/login" target="_blank" rel="noreferrer">前往登入</a>
           <p style="margin-top:32px; font-size:14px; color:#475569;">祝您觀影愉快！<br/>飛訊資訊科技有限公司</p>
@@ -309,9 +309,9 @@ export async function notifyCustomersNewList(batchId, batchName = null) {
               </div>
               <div class="content">
                 <p>親愛的 ${customer.name || '客戶'}，您好：</p>
-                <p>最新的影片清單 <strong>${finalBatchName}</strong> 已上線，歡迎登入系統挑選本月想要播放的片單。</p>
+                <p>最新的影片清單 <strong>${finalBatchName}</strong> 已上線，歡迎登入系統調整您的影片清單。</p>
                 <div style="text-align: center; margin: 28px 0;">
-                  <a href="${frontendUrl}/movies" class="button">立即挑選影片</a>
+                  <a href="${frontendUrl}/movies" class="button">立即調整清單</a>
                 </div>
                 <p>如有任何需求或問題，歡迎與我們聯繫，我們會盡快協助。</p>
               </div>
@@ -484,7 +484,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
           <td style="padding: 16px 12px;">
             <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">
               ${video.title}
-              <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">新增</span>
+              <span style="background: #10b981; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">上架</span>
               ${monthDisplay}
             </div>
             <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
@@ -496,7 +496,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
       addedSectionHtml = `
         <div style="margin-bottom: 24px;">
           <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #10b981;">
-            ✅ 新增影片（共 ${addedVideos.length} 部）
+            ✅ 新上架影片（共 ${addedVideos.length} 部）
             <span style="font-size: 12px; color: #666; font-weight: 400; margin-left: 8px;">（藍色標籤為影片來源月份）</span>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
@@ -531,7 +531,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
           <td style="padding: 16px 12px;">
             <div style="font-weight: 700; font-size: 15px; color: #333; margin-bottom: 4px;">
               ${video.title}
-              <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">移除</span>
+              <span style="background: #ef4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; margin-left: 8px;">下架</span>
               ${monthDisplay}
             </div>
             <div style="font-size: 13px; color: #888;">${video.title_en || ''}</div>
@@ -543,7 +543,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
       removedSectionHtml = `
         <div style="margin-bottom: 24px;">
           <div class="section-title" style="font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 16px; padding-bottom: 12px; border-bottom: 2px solid #ef4444;">
-            ❌ 移除影片（共 ${removedVideos.length} 部）
+            ❌ 下架影片（共 ${removedVideos.length} 部）
             <span style="font-size: 12px; color: #666; font-weight: 400; margin-left: 8px;">（紅色標籤為影片原本來源月份）</span>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
@@ -566,7 +566,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
     if (addedVideos.length > 0 || removedVideos.length > 0) {
       diffSummaryHtml = `
         <div style="background: #fef3c7; border-radius: 12px; padding: 20px; margin-bottom: 24px; border: 1px solid #fde68a;">
-          <div style="font-weight: 700; font-size: 15px; color: #92400e; margin-bottom: 12px;">📊 變更摘要</div>
+          <div style="font-weight: 700; font-size: 15px; color: #92400e; margin-bottom: 12px;">📊 本次調整摘要</div>
           <div style="display: flex; gap: 20px; flex-wrap: wrap;">
             <div style="flex: 1; min-width: 120px;">
               <div style="font-size: 12px; color: #92400e; margin-bottom: 4px;">目前總數</div>
@@ -610,11 +610,11 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
       <body>
         <div class="container">
           <div class="header">
-            <h1>影片選擇確認通知</h1>
+            <h1>客戶清單調整通知</h1>
           </div>
           <div class="content">
             <p style="margin-bottom: 24px; font-size: 15px; line-height: 1.6;">
-              親愛的管理員，客戶 <strong>${customerName}</strong> 已經完成了本期的影片挑選，詳細清單如下：
+              親愛的管理員，客戶 <strong>${customerName}</strong> 已提交清單調整，詳細內容如下：
             </p>
             
             <div class="summary-card">
@@ -643,7 +643,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
             ${removedSectionHtml}
             
             <p style="margin-top: 32px; font-size: 14px; color: #666; line-height: 1.6;">
-              ※ 本郵件為系統自動發送，請依照此清單協助客戶進行後續影片安排。如需與客戶聯繫，請直接回覆此郵件。
+              ※ 本郵件為系統自動發送，請依照此清單進行影片上架/下架作業。如需與客戶聯繫，請直接回覆此郵件。
             </p>
           </div>
           <div class="footer">
@@ -658,7 +658,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
       recipients.map((email) =>
         sendEmail({
           to: email,
-          subject: `[影片選擇通知] ${customerName} - ${batch?.name || '新選擇'}`,
+          subject: `[清單調整通知] ${customerName} 已更新影片清單`,
           body: emailBody,
         })
       )

@@ -111,8 +111,8 @@ export default function SelectionHistory() {
     <div className="space-y-8">
       {/* 標題 */}
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">選擇記錄</h1>
-        <p className="text-gray-600 mt-2">查看您的累積清單和歷史變更記錄</p>
+        <h1 className="text-3xl font-bold text-gray-900">調整記錄</h1>
+        <p className="text-gray-600 mt-2">查看您的影片清單和歷史調整記錄</p>
       </div>
 
       {/* 錯誤訊息 */}
@@ -244,8 +244,8 @@ export default function SelectionHistory() {
         ) : (
           <div className="text-center py-12">
             <Film className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">尚無選擇的影片</h3>
-            <p className="text-gray-600">前往「選擇影片」頁面開始選擇您喜歡的影片</p>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">清單內尚無影片</h3>
+            <p className="text-gray-600">前往「調整清單」頁面開始挑選您喜歡的影片</p>
           </div>
         )}
       </div>
@@ -405,7 +405,7 @@ export default function SelectionHistory() {
                   {/* 沒有變更時顯示提示 */}
                   {isExpanded && addedCount === 0 && removedCount === 0 && (
                     <div className="mt-6 pt-6 border-t border-gray-100 text-center py-4 text-gray-500">
-                      <p>此次提交沒有變更記錄</p>
+                      <p>此次提交沒有調整記錄</p>
                     </div>
                   )}
                 </div>
@@ -415,8 +415,8 @@ export default function SelectionHistory() {
         ) : (
           <div className="card text-center py-12">
             <History className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-gray-900 mb-2">尚無提交記錄</h3>
-            <p className="text-gray-600">您還沒有提交過任何影片選擇</p>
+            <h3 className="text-xl font-bold text-gray-900 mb-2">尚無調整記錄</h3>
+            <p className="text-gray-600">您還沒有提交過任何清單調整</p>
           </div>
         )}
       </div>

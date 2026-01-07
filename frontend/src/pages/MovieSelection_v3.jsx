@@ -323,7 +323,7 @@ export default function MovieSelection() {
   
   function handleSubmitClick() {
     if (pendingChanges.add.size === 0 && pendingChanges.remove.size === 0) {
-      showToast('沒有任何變更需要提交', 'warning')
+      showToast('沒有任何調整需要提交', 'warning')
       return
     }
     
@@ -405,7 +405,7 @@ export default function MovieSelection() {
       // 6. 關閉 Modal
       setShowConfirmModal(false)
       
-      showToast('影片清單已更新！', 'success')
+      showToast('清單已成功更新！', 'success')
       console.log('✅ 提交成功')
       
     } catch (error) {
@@ -426,7 +426,7 @@ export default function MovieSelection() {
       localStorage.removeItem(key)
     }
     
-    showToast('已取消所有變更', 'success')
+    showToast('已取消所有調整', 'success')
   }
   
   // ==================== 計算屬性 ====================
@@ -458,7 +458,7 @@ export default function MovieSelection() {
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
             <Film className="w-8 h-8 text-primary-600" />
-            影片選擇
+            調整我的清單
           </h1>
           
           <div className="flex items-center gap-3">
@@ -499,10 +499,10 @@ export default function MovieSelection() {
                 </div>
                 <div>
                   <p className="font-bold text-gray-900">
-                    待處理變更
+                    待提交的調整
                   </p>
                   <p className="text-sm text-gray-600">
-                    已選擇 <span className="font-semibold text-primary-600">{currentSelectedCount}</span> 部影片
+                    調整後將有 <span className="font-semibold text-primary-600">{currentSelectedCount}</span> 部影片
                     {pendingChanges.add.size > 0 && <span className="text-green-600"> • 新增 {pendingChanges.add.size}</span>}
                     {pendingChanges.remove.size > 0 && <span className="text-red-600"> • 移除 {pendingChanges.remove.size}</span>}
                   </p>
@@ -530,7 +530,7 @@ export default function MovieSelection() {
                   ) : (
                     <>
                       <Send className="w-4 h-4" />
-                      提交選擇
+                      更新我的清單
                     </>
                   )}
                 </button>
@@ -583,7 +583,7 @@ export default function MovieSelection() {
         {/* 標題列與視圖切換 */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-bold text-gray-900">
-            {selectedMonth} 可選影片 ({monthlyVideos.length} 部)
+            {selectedMonth} 影片清單 ({monthlyVideos.length} 部)
           </h2>
           
           <div className="flex items-center gap-2">
@@ -619,7 +619,7 @@ export default function MovieSelection() {
         ) : monthlyVideos.length === 0 ? (
           <div className="text-center py-12">
             <Film className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-500">該月份尚無可選影片</p>
+            <p className="text-gray-500">該月份尚無影片</p>
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -726,16 +726,16 @@ export default function MovieSelection() {
       {showConfirmModal && createPortal(
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto p-6">
-            <h2 className="text-2xl font-bold mb-4">確認提交選擇</h2>
+            <h2 className="text-2xl font-bold mb-4">確認更新清單</h2>
             
             <div className="mb-6 p-4 bg-gray-50 rounded-lg">
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-gray-600">目前總數：</span>
+                  <span className="text-gray-600">調整前：</span>
                   <span className="font-bold ml-2">{confirmData.currentTotal} 部</span>
                 </div>
                 <div>
-                  <span className="text-gray-600">提交後總數：</span>
+                  <span className="text-gray-600">調整後：</span>
                   <span className="font-bold ml-2">{confirmData.newTotal} 部</span>
                 </div>
                 <div className="text-green-600">
@@ -751,7 +751,7 @@ export default function MovieSelection() {
             
             {confirmData.removedCount > 0 && (
               <div className="mb-4">
-                <h3 className="font-bold text-red-600 mb-2">將移除的影片：</h3>
+                <h3 className="font-bold text-red-600 mb-2">將從清單移除：</h3>
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {confirmData.removedVideos.map(video => (
                     <div key={video.id} className="text-sm text-gray-700">
@@ -764,7 +764,7 @@ export default function MovieSelection() {
             
             {confirmData.addedCount > 0 && (
               <div className="mb-6">
-                <h3 className="font-bold text-green-600 mb-2">將新增的影片：</h3>
+                <h3 className="font-bold text-green-600 mb-2">將加入清單：</h3>
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {confirmData.addedVideos.map(video => (
                     <div key={video.id} className="text-sm text-gray-700">
@@ -791,12 +791,12 @@ export default function MovieSelection() {
                 {submitting ? (
                   <>
                     <Loader className="w-4 h-4 animate-spin" />
-                    提交中...
+                    更新中...
                   </>
                 ) : (
                   <>
                     <Check className="w-4 h-4" />
-                    確認提交選擇
+                    確認更新清單
                   </>
                 )}
               </button>
