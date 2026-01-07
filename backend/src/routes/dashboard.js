@@ -71,6 +71,10 @@ router.get('/customer/:userId', async (req, res) => {
 
     // hasSelection 表示客戶是否有累積清單
     const hasSelection = customerListCount > 0;
+    
+    // v3 架構：只有當客戶沒有任何累積清單時才提示「有新批次等待選擇」
+    // 如果客戶已經有清單，他們可以隨時去添加新影片，不需要特別提示
+    const hasNewBatch = Boolean(latestBatch) && !hasSelection;
 
     res.json({
       success: true,
@@ -84,7 +88,7 @@ router.get('/customer/:userId', async (req, res) => {
           total_count: lastSubmission.total_count || 0,
         } : null,
         customerListCount,
-        hasNewBatch: Boolean(latestBatch),
+        hasNewBatch,
       },
     });
   } catch (error) {
