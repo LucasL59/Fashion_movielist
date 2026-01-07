@@ -72,9 +72,20 @@ router.get('/customer/:userId', async (req, res) => {
     // hasSelection 表示客戶是否有累積清單
     const hasSelection = customerListCount > 0;
     
-    // v3 架構：只有當客戶沒有任何累積清單時才提示「有新批次等待選擇」
-    // 如果客戶已經有清單，他們可以隨時去添加新影片，不需要特別提示
-    const hasNewBatch = Boolean(latestBatch) && !hasSelection;
+    // v3 架構：判斷是否有新批次需要客戶處理
+    // 邏輯：有新批次，且客戶在該批次上傳之後還沒有調整過累積清單
+    let hasNewBatch = false;
+    if (latestBatch) {
+      const batchCreatedAt = new Date(latestBatch.created_at);
+      if (lastSubmission) {
+        // 比較客戶最後提交時間與最新批次上傳時間
+        const lastSubmitAt = new Date(lastSubmission.snapshot_date);
+        hasNewBatch = lastSubmitAt < batchCreatedAt; // 客戶在新批次後還沒提交過
+      } else {
+        // 客戶從未提交過，且有新批次
+        hasNewBatch = true;
+      }
+    }
 
     res.json({
       success: true,
