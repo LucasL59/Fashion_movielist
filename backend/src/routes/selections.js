@@ -830,7 +830,7 @@ router.get('/export-changes', requireAuth, async (req, res) => {
       summarySheet.addRow({
         customerName: customer?.name || '未知',
         customerEmail: customer?.email || '未知',
-        submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW'),
+        submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
         addedCount: record.added_count || 0,
         removedCount: record.removed_count || 0,
         totalCount: record.total_count || 0
@@ -862,7 +862,7 @@ router.get('/export-changes', requireAuth, async (req, res) => {
       addedVideos.forEach(video => {
         addedSheet.addRow({
           customerName: customer?.name || '未知',
-          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW'),
+          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
           videoTitle: video.title || '未知',
           videoTitleEn: video.title_en || '',
           sourceMonth: video.month || ''
@@ -895,7 +895,7 @@ router.get('/export-changes', requireAuth, async (req, res) => {
       removedVideos.forEach(video => {
         removedSheet.addRow({
           customerName: customer?.name || '未知',
-          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW'),
+          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
           videoTitle: video.title || '未知',
           videoTitleEn: video.title_en || '',
           sourceMonth: video.month || ''
