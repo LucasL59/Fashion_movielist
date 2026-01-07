@@ -126,7 +126,7 @@ export default function Layout({ children }) {
                     )}
                   </>
                 ) : (
-                  <NavLink to="/movies" icon={Film}>選擇影片</NavLink>
+                  <NavLink to="/movies" icon={Film}>調整清單</NavLink>
                 )}
               </div>
             </div>
@@ -196,7 +196,7 @@ export default function Layout({ children }) {
                   )}
                 </>
               ) : (
-                <MobileNavLink to="/movies" icon={Film}>選擇影片</MobileNavLink>
+                <MobileNavLink to="/movies" icon={Film}>調整清單</MobileNavLink>
               )}
             </div>
           </div>
