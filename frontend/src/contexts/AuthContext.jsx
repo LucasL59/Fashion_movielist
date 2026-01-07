@@ -76,10 +76,33 @@ export function AuthProvider({ children }) {
       }
     })
     
+    // 監聽頁面可見性變化 - 當用戶回到頁面時檢查 Session
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && user) {
+        try {
+          const { data: { session }, error } = await supabase.auth.getSession()
+          if (error || !session) {
+            console.warn('Session 已過期，正在清除狀態...')
+            setUser(null)
+            clearAuthStorage()
+            // 跳轉到登入頁
+            if (window.location.pathname !== '/login') {
+              window.location.replace('/login?expired=true')
+            }
+          }
+        } catch (e) {
+          console.warn('檢查 Session 失敗:', e)
+        }
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
     return () => {
       subscription.unsubscribe()
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, []) // 只在組件掛載時執行一次
+  }, [user]) // 當 user 變化時重新設置監聽器
   
   /**
    * 獲取用戶 Profile
@@ -157,21 +180,35 @@ export function AuthProvider({ children }) {
   
   /**
    * 登出
+   * 注意：即使 API 調用失敗也會完成登出，確保用戶能正常登出
    */
   async function signOut() {
+    // 先記錄用戶資訊（在清除前）
+    const userInfo = user ? { email: user.email, id: user.id } : {}
+    
+    // 立即清除本地狀態，確保登出一定會執行
+    setUser(null)
+    
+    // 嘗試記錄登出事件（不阻擋登出流程）
     try {
       await recordOperationEvent({
         action: 'auth.logout',
         description: '使用者登出系統',
-        metadata: user ? { email: user.email, id: user.id } : {},
+        metadata: userInfo,
       })
     } catch (logError) {
-      console.warn('登出紀錄寫入失敗:', logError)
+      // 忽略錯誤，不影響登出
+      console.warn('登出紀錄寫入失敗（不影響登出）:', logError)
     }
 
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
-    setUser(null)
+    // 嘗試調用 Supabase 登出（不阻擋登出流程）
+    try {
+      await supabase.auth.signOut()
+    } catch (error) {
+      console.warn('Supabase 登出失敗（不影響登出）:', error)
+    }
+    
+    // 清除所有本地存儲
     clearAuthStorage()
   }
   

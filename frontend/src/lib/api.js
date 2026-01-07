@@ -67,36 +67,76 @@ api.interceptors.request.use(
 
 // 401 錯誤處理：自動登出並跳轉到登入頁
 let isHandling401 = false // 防止重複處理
+let redirectTimeout = null // 跳轉超時保護
 
 async function handle401Error() {
+  // 如果已經在處理中，直接返回
   if (isHandling401) return
   isHandling401 = true
   
+  // 設置超時保護：如果 5 秒內沒完成，強制跳轉
+  redirectTimeout = setTimeout(() => {
+    console.warn('401 處理超時，強制跳轉到登入頁')
+    forceRedirectToLogin()
+  }, 5000)
+  
   try {
-    // 動態導入 supabase 清除 session
-    const { supabase } = await import('./supabase')
-    await supabase.auth.signOut()
+    // 清除本地存儲的認證資訊（優先執行，確保清除成功）
+    clearAuthStorage()
     
-    // 清除本地存儲的認證資訊
+    // 嘗試調用 supabase 登出（不等待太久）
+    try {
+      const { supabase } = await import('./supabase')
+      // 設置 1 秒超時，避免卡住
+      await Promise.race([
+        supabase.auth.signOut(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('登出超時')), 1000))
+      ])
+    } catch (e) {
+      // 忽略登出錯誤，繼續跳轉
+      console.warn('Supabase 登出失敗或超時:', e.message)
+    }
+    
+    // 跳轉到登入頁面
+    forceRedirectToLogin()
+  } catch (e) {
+    console.error('處理 401 錯誤時發生問題:', e)
+    // 即使出錯也要跳轉
+    forceRedirectToLogin()
+  }
+}
+
+// 強制跳轉到登入頁
+function forceRedirectToLogin() {
+  // 清除超時保護
+  if (redirectTimeout) {
+    clearTimeout(redirectTimeout)
+    redirectTimeout = null
+  }
+  
+  const currentPath = window.location.pathname
+  if (currentPath !== '/login') {
+    // 使用 replace 避免用戶返回到無效頁面
+    window.location.replace('/login?expired=true')
+  }
+  
+  // 重置標記（雖然頁面會重新載入，但以防萬一）
+  isHandling401 = false
+}
+
+// 清除認證相關的本地存儲
+function clearAuthStorage() {
+  try {
     const keysToRemove = []
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i)
-      if (key && (key.includes('supabase') || key.includes('auth'))) {
+      if (key && (key.includes('supabase') || key.includes('auth') || key.includes('pending-changes'))) {
         keysToRemove.push(key)
       }
     }
     keysToRemove.forEach(key => localStorage.removeItem(key))
-    
-    // 跳轉到登入頁面（帶上過期提示）
-    const currentPath = window.location.pathname
-    if (currentPath !== '/login') {
-      window.location.href = '/login?expired=true'
-    }
   } catch (e) {
-    console.error('處理 401 錯誤時發生問題:', e)
-  } finally {
-    // 延遲重置標記，避免短時間內重複處理
-    setTimeout(() => { isHandling401 = false }, 3000)
+    console.warn('清除本地存儲失敗:', e)
   }
 }
 
