@@ -358,21 +358,28 @@ router.post('/:customerId/submit', requireAuth, async (req, res) => {
         console.log(`📅 [customer-list] 已獲取 ${enrichedRemovedVideos.length} 部移除影片的月份信息`);
       }
       
-      // 準備郵件通知資料
-      const emailData = {
-        customerId,
-        customerName,
-        customerEmail,
-        totalCount: videoIds.length,
-        addedVideos: enrichedAddedVideos,  // 包含月份信息
-        removedVideos: enrichedRemovedVideos // 包含月份信息
-      };
+      // 檢查是否有實際變更
+      const hasChanges = enrichedAddedVideos.length > 0 || enrichedRemovedVideos.length > 0;
       
-      console.log(`📧 [customer-list] 準備發送通知: 新增 ${enrichedAddedVideos.length} 部, 移除 ${enrichedRemovedVideos.length} 部`);
-      
-      await notifyAdminCustomerSelection(emailData);
-      
-      console.log('📧 [customer-list] 已發送通知');
+      if (hasChanges) {
+        // 準備郵件通知資料
+        const emailData = {
+          customerId,
+          customerName,
+          customerEmail,
+          totalCount: videoIds.length,
+          addedVideos: enrichedAddedVideos,  // 包含月份信息
+          removedVideos: enrichedRemovedVideos // 包含月份信息
+        };
+        
+        console.log(`📧 [customer-list] 準備發送通知: 新增 ${enrichedAddedVideos.length} 部, 移除 ${enrichedRemovedVideos.length} 部`);
+        
+        await notifyAdminCustomerSelection(emailData);
+        
+        console.log('📧 [customer-list] 已發送通知');
+      } else {
+        console.log('📧 [customer-list] 沒有實際變更，跳過發送郵件通知');
+      }
     } catch (emailError) {
       console.error('⚠️ [customer-list] 發送通知失敗:', emailError);
       // 通知失敗不影響提交
