@@ -102,6 +102,102 @@ router.post('/', requireAuth, requireAdmin, async (req, res) => {
   }
 })
 
+/**
+ * DELETE /api/users/:id
+ * 管理員刪除使用者及其相關資料
+ */
+router.delete('/:id', requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params
+    const operatorId = req.user?.id
+
+    // 防止刪除自己
+    if (id === operatorId) {
+      return res.status(400).json({ 
+        error: 'ValidationError', 
+        message: '無法刪除自己的帳號' 
+      })
+    }
+
+    // 1. 檢查使用者是否存在
+    const existingProfile = await fetchProfileById(id)
+    if (!existingProfile) {
+      return res.status(404).json({ 
+        error: 'NotFound', 
+        message: '找不到指定的使用者' 
+      })
+    }
+
+    // 2. 刪除使用者相關的客戶清單資料（如果是客戶）
+    if (existingProfile.role === 'customer') {
+      // 刪除 customer_list_items
+      const { error: itemsError } = await supabase
+        .from('customer_list_items')
+        .delete()
+        .eq('customer_id', id)
+      
+      if (itemsError) {
+        console.warn('刪除客戶清單項目失敗:', itemsError.message)
+      }
+
+      // 刪除 customer_list_snapshots
+      const { error: snapshotsError } = await supabase
+        .from('customer_list_snapshots')
+        .delete()
+        .eq('customer_id', id)
+      
+      if (snapshotsError) {
+        console.warn('刪除客戶快照失敗:', snapshotsError.message)
+      }
+    }
+
+    // 3. 刪除 profiles 資料
+    const { error: profileDeleteError } = await supabase
+      .from('profiles')
+      .delete()
+      .eq('id', id)
+
+    if (profileDeleteError) {
+      throw profileDeleteError
+    }
+
+    // 4. 刪除 Supabase Auth 使用者
+    const { error: authDeleteError } = await supabase.auth.admin.deleteUser(id)
+    
+    if (authDeleteError) {
+      console.error('刪除 Auth 使用者失敗:', authDeleteError.message)
+      // 即使 Auth 刪除失敗，Profile 已刪除，仍視為部分成功
+    }
+
+    // 5. 記錄操作日誌
+    await recordOperationLog({
+      req,
+      action: 'users.delete',
+      target: {
+        id,
+        name: existingProfile.name,
+        email: existingProfile.email,
+      },
+      description: `刪除使用者：${existingProfile.name} (${existingProfile.email})`,
+      metadata: {
+        deletedUserRole: existingProfile.role,
+      },
+    })
+
+    res.json({ 
+      success: true, 
+      message: `使用者 ${existingProfile.name} 已成功刪除` 
+    })
+
+  } catch (error) {
+    console.error('刪除使用者失敗:', error)
+    res.status(500).json({ 
+      error: 'UserDeletionError', 
+      message: error.message || '刪除使用者失敗' 
+    })
+  }
+})
+
 router.put('/:id/role', requireAuth, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params
