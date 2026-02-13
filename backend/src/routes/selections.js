@@ -9,6 +9,7 @@ import { supabase } from '../config/supabase.js';
 import { notifyAdminCustomerSelection } from '../services/emailService.js';
 import { requireAuth } from '../middleware/auth.js';
 import { recordOperationLog } from '../services/operationLogService.js';
+import { formatTaiwanDateTime, getTaiwanMonthBoundary } from '../utils/timezone.js';
 
 const router = express.Router();
 
@@ -768,17 +769,15 @@ router.get('/export-changes', requireAuth, async (req, res) => {
 
     console.log(`📊 匯出 ${month} 的客戶清單調整記錄...`);
 
-    // 計算月份範圍
-    const startDate = new Date(`${month}-01T00:00:00.000Z`);
-    const endDate = new Date(startDate);
-    endDate.setMonth(endDate.getMonth() + 1);
+    // 計算月份範圍（使用台灣時區邊界）
+    const { start: monthStartUTC, end: monthEndUTC } = getTaiwanMonthBoundary(month);
 
     // 查詢該月份的所有選擇歷史記錄
     const { data: historyRecords, error: historyError } = await supabase
       .from('selection_history')
       .select('*')
-      .gte('snapshot_date', startDate.toISOString())
-      .lt('snapshot_date', endDate.toISOString())
+      .gte('snapshot_date', monthStartUTC)
+      .lt('snapshot_date', monthEndUTC)
       .order('snapshot_date', { ascending: false });
 
     if (historyError) throw historyError;
@@ -830,7 +829,7 @@ router.get('/export-changes', requireAuth, async (req, res) => {
       summarySheet.addRow({
         customerName: customer?.name || '未知',
         customerEmail: customer?.email || '未知',
-        submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
+        submittedAt: formatTaiwanDateTime(record.snapshot_date),
         addedCount: record.added_count || 0,
         removedCount: record.removed_count || 0,
         totalCount: record.total_count || 0
@@ -862,7 +861,7 @@ router.get('/export-changes', requireAuth, async (req, res) => {
       addedVideos.forEach(video => {
         addedSheet.addRow({
           customerName: customer?.name || '未知',
-          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
+          submittedAt: formatTaiwanDateTime(record.snapshot_date),
           videoTitle: video.title || '未知',
           videoTitleEn: video.title_en || '',
           sourceMonth: video.month || ''
@@ -895,7 +894,7 @@ router.get('/export-changes', requireAuth, async (req, res) => {
       removedVideos.forEach(video => {
         removedSheet.addRow({
           customerName: customer?.name || '未知',
-          submittedAt: new Date(record.snapshot_date).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }),
+          submittedAt: formatTaiwanDateTime(record.snapshot_date),
           videoTitle: video.title || '未知',
           videoTitleEn: video.title_en || '',
           sourceMonth: video.month || ''

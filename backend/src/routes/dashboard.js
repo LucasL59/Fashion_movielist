@@ -7,6 +7,7 @@
 import express from 'express';
 import { supabase } from '../config/supabase.js';
 import { requireAuth, requireRoles } from '../middleware/auth.js';
+import { getTaiwanMonthBoundary } from '../utils/timezone.js';
 
 const router = express.Router();
 
@@ -182,15 +183,7 @@ router.get('/admin/overview', requireAuth, requireRoles(['admin', 'uploader']), 
       console.log(`📅 按月份篩選: ${month}`);
       
       // 使用台灣時區（UTC+8）計算月份邊界
-      // 例如：2026-01 的台灣時間範圍 = 2025-12-31T16:00:00Z ~ 2026-01-31T16:00:00Z
-      const monthStartTW = `${month}-01T00:00:00+08:00`;
-      const [yearNum, monthNum] = month.split('-').map(Number);
-      const nextMonth = monthNum === 12 ? `${yearNum + 1}-01` : `${yearNum}-${String(monthNum + 1).padStart(2, '0')}`;
-      const monthEndTW = `${nextMonth}-01T00:00:00+08:00`;
-      
-      // 轉換為 UTC ISO 格式供 Supabase 查詢使用
-      const monthStartUTC = new Date(monthStartTW).toISOString();
-      const monthEndUTC = new Date(monthEndTW).toISOString();
+      const { start: monthStartUTC, end: monthEndUTC } = getTaiwanMonthBoundary(month);
       
       const { data: monthlySubmissions, error: monthlyError } = await supabase
         .from('selection_history')
@@ -287,12 +280,16 @@ router.get('/admin/overview', requireAuth, requireRoles(['admin', 'uploader']), 
     }
 
     // 提取唯一的月份列表（使用台灣時區歸類月份）
+    // 手動計算 UTC+8 偏移後提取 YYYY-MM，不依賴 toLocaleString
+    const TAIWAN_OFFSET = 8 * 60 * 60 * 1000;
     const availableMonths = [];
     const seenMonths = new Set();
     (allSubmissions || []).forEach((record) => {
-      // 將 UTC 時間轉換為台灣時區後再提取月份
-      const twDate = new Date(record.snapshot_date).toLocaleString('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit' });
-      const monthStr = twDate.slice(0, 7); // YYYY-MM
+      const utcDate = new Date(record.snapshot_date);
+      const twDate = new Date(utcDate.getTime() + TAIWAN_OFFSET);
+      const year = twDate.getUTCFullYear();
+      const month = String(twDate.getUTCMonth() + 1).padStart(2, '0');
+      const monthStr = `${year}-${month}`;
       if (!seenMonths.has(monthStr)) {
         seenMonths.add(monthStr);
         availableMonths.push(monthStr);

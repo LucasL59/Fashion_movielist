@@ -6,6 +6,7 @@
 
 import { sendEmail } from '../config/graphClient.js';
 import { supabase } from '../config/supabase.js';
+import { formatTaiwanDateTime, getTaiwanYear } from '../utils/timezone.js';
 
 const MAIL_EVENT_TYPES = {
   SELECTION_SUBMITTED: 'selection_submitted',
@@ -432,7 +433,7 @@ export async function notifyCustomersNewList(batchId, batchName = null) {
               <div class="info">
                 <p><strong>清單名稱：</strong>${finalBatchName}</p>
                 <p><strong>影片數量：</strong>${videoCount || 0} 部</p>
-                <p><strong>通知時間：</strong>${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</p>
+                <p><strong>通知時間：</strong>${formatTaiwanDateTime()}</p>
               </div>
               <p style="margin-top: 24px;">此通知僅發送給內部管理人員，提醒最新批次已經完成上傳。</p>
             </div>
@@ -674,7 +675,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
               </div>
               <div class="summary-item">
                 <span class="label">提交時間</span>
-                <span class="value">${new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}</span>
+                <span class="value">${formatTaiwanDateTime()}</span>
               </div>
             </div>
             
@@ -689,7 +690,7 @@ export async function notifyAdminCustomerSelection({ customerId, customerName, c
             </p>
           </div>
           <div class="footer">
-            <p>&copy; ${new Date().getFullYear()} MVI 影片選擇系統 | Fashion Info Tech Co., Ltd.</p>
+            <p>&copy; ${getTaiwanYear()} MVI 影片選擇系統 | Fashion Info Tech Co., Ltd.</p>
           </div>
         </div>
       </body>
