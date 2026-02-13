@@ -33,15 +33,20 @@ export default function AdminDashboard() {
       setOverviewLoading(true)
       setOverviewError('')
       
-      // 如果指定月份，使用月份篩選；否則不傳參數（顯示當前批次）
-      const params = month || selectedMonth ? { month: month || selectedMonth } : {}
-      const response = await getAdminDashboardOverview(null, params)
+      // 決定要查詢的月份：優先使用傳入的月份，其次使用已選月份
+      const effectiveMonth = month || selectedMonth || null
+      const response = await getAdminDashboardOverview(effectiveMonth)
       const data = response.data || {}
       setOverview(data)
       
-      // 如果沒有選定月份且有可用月份，預設選擇最新的月份
+      // 初次載入：如果尚未選定月份且有可用月份，自動選擇最新月份並重新載入
       if (!selectedMonth && !month && data.availableMonths && data.availableMonths.length > 0) {
-        setSelectedMonth(data.availableMonths[0])
+        const latestMonth = data.availableMonths[0]
+        setSelectedMonth(latestMonth)
+        // 使用最新月份重新載入，確保顯示的是該月份的提交狀態（而非累積狀態）
+        const monthResponse = await getAdminDashboardOverview(latestMonth)
+        const monthData = monthResponse.data || {}
+        setOverview(monthData)
       }
     } catch (error) {
       console.error('載入概況失敗:', error)
@@ -109,7 +114,15 @@ export default function AdminDashboard() {
           <div className="flex items-center gap-3 mb-4">
             <BarChart3 className="h-6 w-6 text-primary-600" />
             <div>
-              <p className="text-sm text-gray-500">客戶提交狀態</p>
+              <p className="text-sm text-gray-500 flex items-center gap-2">
+                客戶提交狀態
+                {selectedMonth && (
+                  <span className="inline-flex items-center gap-1 bg-primary-50 text-primary-700 text-xs font-medium px-2 py-0.5 rounded-full">
+                    <Calendar className="h-3 w-3" />
+                    {formatMonth(selectedMonth)}
+                  </span>
+                )}
+              </p>
               <p className="text-lg font-semibold text-gray-900">
                 {submittedCount}/{totalCustomers} 位已提交
               </p>

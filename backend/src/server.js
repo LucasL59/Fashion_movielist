@@ -145,6 +145,40 @@ app.use((err, req, res, next) => {
   });
 });
 
+// ==================== Keep-alive 機制 ====================
+
+/**
+ * 防止 Render 免費方案休眠（15 分鐘無流量後會自動停機）
+ * 
+ * 每 14 分鐘透過外部 URL ping 自己的 /health 端點
+ * 僅在生產環境且有外部 URL 時啟用
+ */
+function startKeepAlive() {
+  const externalUrl = process.env.RENDER_EXTERNAL_URL;
+  
+  if (process.env.NODE_ENV !== 'production' || !externalUrl) {
+    console.log('ℹ️ Keep-alive 未啟用（非生產環境或未設定 RENDER_EXTERNAL_URL）');
+    return;
+  }
+  
+  const INTERVAL_MS = 14 * 60 * 1000; // 14 分鐘
+  
+  setInterval(async () => {
+    try {
+      const response = await fetch(`${externalUrl}/health`);
+      if (response.ok) {
+        console.log(`🏓 Keep-alive ping 成功 (${response.status})`);
+      } else {
+        console.warn(`⚠️ Keep-alive ping 異常: HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.warn('⚠️ Keep-alive ping 失敗:', error.message);
+    }
+  }, INTERVAL_MS);
+  
+  console.log(`🏓 Keep-alive 已啟用：每 14 分鐘 ping ${externalUrl}/health`);
+}
+
 // ==================== 啟動伺服器 ====================
 
 app.listen(PORT, () => {
@@ -153,6 +187,9 @@ app.listen(PORT, () => {
   
   // 初始化提醒排程器
   initializeReminderScheduler();
+  
+  // 啟動 Keep-alive（防止 Render 休眠）
+  startKeepAlive();
 });
 
 export default app;

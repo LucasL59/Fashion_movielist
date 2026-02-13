@@ -92,13 +92,15 @@ function applySchedule(config) {
     return;
   }
 
-  // 建立排程任務
+  // 建立排程任務（使用台灣時區，確保排程時間對應台灣當地時間）
   reminderJob = cron.schedule(config.cronSchedule, async () => {
     console.log('⏰ 執行提醒任務...');
     await executeReminder(config);
+  }, {
+    timezone: 'Asia/Taipei'
   });
 
-  console.log(`✅ 提醒排程已啟用: ${config.cronSchedule}`);
+  console.log(`✅ 提醒排程已啟用: ${config.cronSchedule} (Asia/Taipei)`);
 }
 
 /**

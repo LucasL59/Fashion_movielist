@@ -181,15 +181,22 @@ router.get('/admin/overview', requireAuth, requireRoles(['admin', 'uploader']), 
     if (month) {
       console.log(`📅 按月份篩選: ${month}`);
       
-      // 查詢該月份的所有提交記錄
-      const monthStart = `${month}-01`;
-      const monthEnd = new Date(new Date(monthStart).setMonth(new Date(monthStart).getMonth() + 1)).toISOString().slice(0, 10);
+      // 使用台灣時區（UTC+8）計算月份邊界
+      // 例如：2026-01 的台灣時間範圍 = 2025-12-31T16:00:00Z ~ 2026-01-31T16:00:00Z
+      const monthStartTW = `${month}-01T00:00:00+08:00`;
+      const [yearNum, monthNum] = month.split('-').map(Number);
+      const nextMonth = monthNum === 12 ? `${yearNum + 1}-01` : `${yearNum}-${String(monthNum + 1).padStart(2, '0')}`;
+      const monthEndTW = `${nextMonth}-01T00:00:00+08:00`;
+      
+      // 轉換為 UTC ISO 格式供 Supabase 查詢使用
+      const monthStartUTC = new Date(monthStartTW).toISOString();
+      const monthEndUTC = new Date(monthEndTW).toISOString();
       
       const { data: monthlySubmissions, error: monthlyError } = await supabase
         .from('selection_history')
         .select('customer_id, snapshot_date, total_count')
-        .gte('snapshot_date', `${monthStart}T00:00:00`)
-        .lt('snapshot_date', `${monthEnd}T00:00:00`)
+        .gte('snapshot_date', monthStartUTC)
+        .lt('snapshot_date', monthEndUTC)
         .order('snapshot_date', { ascending: false });
 
       if (monthlyError) throw monthlyError;
@@ -279,14 +286,16 @@ router.get('/admin/overview', requireAuth, requireRoles(['admin', 'uploader']), 
       console.error('⚠️ 查詢提交月份失敗:', allSubmissionsError);
     }
 
-    // 提取唯一的月份列表
+    // 提取唯一的月份列表（使用台灣時區歸類月份）
     const availableMonths = [];
     const seenMonths = new Set();
     (allSubmissions || []).forEach((record) => {
-      const month = record.snapshot_date.slice(0, 7); // YYYY-MM
-      if (!seenMonths.has(month)) {
-        seenMonths.add(month);
-        availableMonths.push(month);
+      // 將 UTC 時間轉換為台灣時區後再提取月份
+      const twDate = new Date(record.snapshot_date).toLocaleString('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit' });
+      const monthStr = twDate.slice(0, 7); // YYYY-MM
+      if (!seenMonths.has(monthStr)) {
+        seenMonths.add(monthStr);
+        availableMonths.push(monthStr);
       }
     });
 
